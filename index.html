@@ -1381,6 +1381,7 @@ const app = {
       this.pushUndo();
       const el = this.createElement('math', this.viewport.x + 100, this.viewport.y + 100, 200, 60);
       el.latex = latex;
+      el.fontSize = 18;
       el.fill = 'transparent';
       el.stroke = 'none';
       el.strokeWidth = 0;
@@ -2247,7 +2248,7 @@ const app = {
         if (!sel) continue;
         const handle = this.hitResizeHandle(p.x, p.y, sel);
         if (handle) {
-          this.resizing = { el: sel, handle, startX: p.x, startY: p.y, orig: { x: sel.x, y: sel.y, width: sel.width || 0, height: sel.height || 0 } };
+          this.resizing = { el: sel, handle, startX: p.x, startY: p.y, orig: { x: sel.x, y: sel.y, width: sel.width || 0, height: sel.height || 0, fontSize: sel.fontSize } };
           return;
         }
       }
@@ -2256,7 +2257,7 @@ const app = {
         // Check if clicking a resize handle of hit element
         const handle = this.hitResizeHandle(p.x, p.y, hit);
         if (handle) {
-          this.resizing = { el: hit, handle, startX: p.x, startY: p.y, orig: { x: hit.x, y: hit.y, width: hit.width || 0, height: hit.height || 0 } };
+          this.resizing = { el: hit, handle, startX: p.x, startY: p.y, orig: { x: hit.x, y: hit.y, width: hit.width || 0, height: hit.height || 0, fontSize: hit.fontSize } };
           return;
         }
         if (!e.shiftKey && !this.selection.includes(hit.id)) {
@@ -2417,6 +2418,11 @@ const app = {
       if (handle.includes('b')) { el.height = Math.max(20, this.snapVal(orig.height + dy)); }
       if (handle.includes('l')) { el.x = this.snapVal(orig.x + dx); el.width = Math.max(20, this.snapVal(orig.width - dx)); }
       if (handle.includes('t')) { el.y = this.snapVal(orig.y + dy); el.height = Math.max(20, this.snapVal(orig.height - dy)); }
+      // Scale font size proportionally for math elements
+      if (el.type === 'math' && orig.height > 0) {
+        const scale = el.height / orig.height;
+        el.fontSize = Math.max(8, Math.round((orig.fontSize || 18) * scale));
+      }
       this.render();
       return;
     }
