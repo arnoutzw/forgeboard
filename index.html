@@ -1358,6 +1358,20 @@ const app = {
       this._panStart = { x: e.clientX, y: e.clientY, vx: this.viewport.x, vy: this.viewport.y };
       return;
     }
+    // Eraser: delegate to SVG hit-test erase logic
+    if (this.tool === 'eraser') {
+      const p = this.screenToCanvas(e.clientX, e.clientY);
+      const r = this.eraserRadius / this.viewport.zoom;
+      const hit = this.hitTestRadius(p.x, p.y, r);
+      if (hit) {
+        this.pushUndo();
+        this.elements = this.elements.filter(el => el.id !== hit.id);
+        this.selection = [];
+        this.render();
+        this.saveData();
+      }
+      return;
+    }
     e.target.setPointerCapture(e.pointerId);
     const p = this.screenToCanvas(e.clientX, e.clientY);
     this._currentStroke = {
@@ -1493,7 +1507,16 @@ const app = {
   },
 
   // ─── Element creation ────────────────────────────────────
+  _themeAccent() {
+    return getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#f59e0b';
+  },
+  _themeBg2() {
+    return getComputedStyle(document.documentElement).getPropertyValue('--bg2').trim() || '#292524';
+  },
+
   createElement(type, x, y, w, h) {
+    const accentColor = this._themeAccent();
+    const bgColor = this._themeBg2();
     return {
       id: uid(),
       type,
@@ -1501,8 +1524,8 @@ const app = {
       width: w,
       height: h,
       rotation: 0,
-      fill: type === 'text' ? 'transparent' : '#292524',
-      stroke: '#f59e0b',
+      fill: type === 'text' ? 'transparent' : bgColor,
+      stroke: accentColor,
       strokeWidth: 2,
       text: '',
       fontSize: 14,
@@ -1656,8 +1679,8 @@ const app = {
         rect.setAttribute('width', el.width);
         rect.setAttribute('height', el.height);
         rect.setAttribute('rx', el.type === 'engineering-block' ? 2 : 6);
-        rect.setAttribute('fill', el.fill || '#292524');
-        rect.setAttribute('stroke', el.stroke || '#f59e0b');
+        rect.setAttribute('fill', el.fill || this._themeBg2());
+        rect.setAttribute('stroke', el.stroke || this._themeAccent());
         rect.setAttribute('stroke-width', el.strokeWidth || 2);
         group.appendChild(rect);
 
@@ -1675,7 +1698,7 @@ const app = {
           const sp = document.createElementNS(SVG_NS, 'path');
           sp.setAttribute('d', el.symbolPath);
           sp.setAttribute('fill', el.symbolFill || 'none');
-          sp.setAttribute('stroke', el.stroke || '#f59e0b');
+          sp.setAttribute('stroke', el.stroke || this._themeAccent());
           sp.setAttribute('stroke-width', Math.max(1, 1.5 / scale));
           sp.setAttribute('stroke-linecap', 'round');
           sp.setAttribute('stroke-linejoin', 'round');
@@ -1685,7 +1708,7 @@ const app = {
             const circ = document.createElementNS(SVG_NS, 'circle');
             circ.setAttribute('cx', '12'); circ.setAttribute('cy', '12'); circ.setAttribute('r', '10');
             circ.setAttribute('fill', 'none');
-            circ.setAttribute('stroke', el.stroke || '#f59e0b');
+            circ.setAttribute('stroke', el.stroke || this._themeAccent());
             circ.setAttribute('stroke-width', Math.max(1, 1.5 / scale));
             sg.appendChild(circ);
           }
@@ -1693,7 +1716,7 @@ const app = {
             const ep = document.createElementNS(SVG_NS, 'path');
             ep.setAttribute('d', el.symbolExtra);
             ep.setAttribute('fill', 'none');
-            ep.setAttribute('stroke', el.stroke || '#f59e0b');
+            ep.setAttribute('stroke', el.stroke || this._themeAccent());
             ep.setAttribute('stroke-width', Math.max(1, 1.5 / scale));
             ep.setAttribute('stroke-linecap', 'round');
             sg.appendChild(ep);
@@ -1703,7 +1726,7 @@ const app = {
             lt.setAttribute('x', '12'); lt.setAttribute('y', '14');
             lt.setAttribute('text-anchor', 'middle');
             lt.setAttribute('font-size', '6');
-            lt.setAttribute('fill', el.stroke || '#f59e0b');
+            lt.setAttribute('fill', el.stroke || this._themeAccent());
             lt.setAttribute('stroke', 'none');
             lt.textContent = el.symbolLabel;
             sg.appendChild(lt);
@@ -1716,8 +1739,8 @@ const app = {
         ell.setAttribute('cy', el.y + el.height / 2);
         ell.setAttribute('rx', el.width / 2);
         ell.setAttribute('ry', el.height / 2);
-        ell.setAttribute('fill', el.fill || '#292524');
-        ell.setAttribute('stroke', el.stroke || '#f59e0b');
+        ell.setAttribute('fill', el.fill || this._themeBg2());
+        ell.setAttribute('stroke', el.stroke || this._themeAccent());
         ell.setAttribute('stroke-width', el.strokeWidth || 2);
         group.appendChild(ell);
       } else if (el.type === 'diamond') {
@@ -1725,8 +1748,8 @@ const app = {
         const cy = el.y + el.height / 2;
         const poly = document.createElementNS(SVG_NS, 'polygon');
         poly.setAttribute('points', `${cx},${el.y} ${el.x + el.width},${cy} ${cx},${el.y + el.height} ${el.x},${cy}`);
-        poly.setAttribute('fill', el.fill || '#292524');
-        poly.setAttribute('stroke', el.stroke || '#f59e0b');
+        poly.setAttribute('fill', el.fill || this._themeBg2());
+        poly.setAttribute('stroke', el.stroke || this._themeAccent());
         poly.setAttribute('stroke-width', el.strokeWidth || 2);
         group.appendChild(poly);
       } else if (el.type === 'sticky') {
@@ -1792,7 +1815,7 @@ const app = {
       // Use path for elbow/curved connectors
       const path = document.createElementNS(SVG_NS, 'path');
       path.setAttribute('d', this.renderConnectorPath(el));
-      path.setAttribute('stroke', el.stroke || '#f59e0b');
+      path.setAttribute('stroke', el.stroke || this._themeAccent());
       path.setAttribute('stroke-width', el.strokeWidth || 2);
       path.setAttribute('fill', 'none');
       path.setAttribute('data-id', el.id);
@@ -1806,7 +1829,7 @@ const app = {
       line.setAttribute('y1', el.y);
       line.setAttribute('x2', el.x2);
       line.setAttribute('y2', el.y2);
-      line.setAttribute('stroke', el.stroke || '#f59e0b');
+      line.setAttribute('stroke', el.stroke || this._themeAccent());
       line.setAttribute('stroke-width', el.strokeWidth || 2);
       line.setAttribute('data-id', el.id);
       line.style.opacity = el.opacity || 1;
@@ -2214,8 +2237,8 @@ const app = {
     this._editingId = id;
     document.getElementById('edit-text').value = el.text || '';
     document.getElementById('edit-type').value = el.type;
-    document.getElementById('edit-fill').value = el.fill || '#292524';
-    document.getElementById('edit-stroke').value = el.stroke || '#f59e0b';
+    document.getElementById('edit-fill').value = el.fill || this._themeBg2();
+    document.getElementById('edit-stroke').value = el.stroke || this._themeAccent();
     this.openModal('modal-edit');
   },
 
@@ -2240,8 +2263,8 @@ const app = {
     const sel = this.getSelectedElements();
     if (sel.length === 0) return;
     const el = sel[0];
-    document.getElementById('prop-fill').value = el.fill || '#292524';
-    document.getElementById('prop-stroke').value = el.stroke || '#f59e0b';
+    document.getElementById('prop-fill').value = el.fill || this._themeBg2();
+    document.getElementById('prop-stroke').value = el.stroke || this._themeAccent();
     document.getElementById('prop-stroke-width').value = el.strokeWidth || 2;
     document.getElementById('prop-font-size').value = el.fontSize || 14;
     document.getElementById('prop-opacity').value = el.opacity || 1;
@@ -2996,8 +3019,8 @@ const app = {
       rect.setAttribute('x', el.x); rect.setAttribute('y', el.y);
       rect.setAttribute('width', el.width); rect.setAttribute('height', el.height);
       rect.setAttribute('rx', el.type === 'engineering-block' ? 2 : 6);
-      rect.setAttribute('fill', el.fill || '#292524');
-      rect.setAttribute('stroke', el.stroke || '#f59e0b');
+      rect.setAttribute('fill', el.fill || this._themeBg2());
+      rect.setAttribute('stroke', el.stroke || this._themeAccent());
       rect.setAttribute('stroke-width', el.strokeWidth || 2);
       group.appendChild(rect);
       if (el.type === 'engineering-block' && el.symbolPath) {
@@ -3011,7 +3034,7 @@ const app = {
         const sp = document.createElementNS(SVG_NS, 'path');
         sp.setAttribute('d', el.symbolPath);
         sp.setAttribute('fill', el.symbolFill || 'none');
-        sp.setAttribute('stroke', el.stroke || '#f59e0b');
+        sp.setAttribute('stroke', el.stroke || this._themeAccent());
         sp.setAttribute('stroke-width', Math.max(1, 1.5 / scale));
         sp.setAttribute('stroke-linecap', 'round'); sp.setAttribute('stroke-linejoin', 'round');
         if (el.symbolDash) sp.setAttribute('stroke-dasharray', el.symbolDash);
@@ -3025,8 +3048,8 @@ const app = {
       const ell = document.createElementNS(SVG_NS, 'ellipse');
       ell.setAttribute('cx', el.x + el.width / 2); ell.setAttribute('cy', el.y + el.height / 2);
       ell.setAttribute('rx', el.width / 2); ell.setAttribute('ry', el.height / 2);
-      ell.setAttribute('fill', el.fill || '#292524');
-      ell.setAttribute('stroke', el.stroke || '#f59e0b');
+      ell.setAttribute('fill', el.fill || this._themeBg2());
+      ell.setAttribute('stroke', el.stroke || this._themeAccent());
       ell.setAttribute('stroke-width', el.strokeWidth || 2);
       group.appendChild(ell);
     }
