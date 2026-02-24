@@ -7,6 +7,8 @@
 <meta name="description" content="Engineering-focused digital whiteboard with vector shapes, freehand drawing, smart connectors and cross-tool integration.">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%2318181b'/><path d='M8 24L16 8l8 16' stroke='%23f59e0b' stroke-width='2.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/><circle cx='16' cy='16' r='3' fill='%23f59e0b'/></svg>">
 <link rel="manifest" href="data:application/json;base64,eyJuYW1lIjoiRm9yZ2VCb2FyZCIsInNob3J0X25hbWUiOiJGb3JnZUJvYXJkIiwic3RhcnRfdXJsIjoiLi8iLCJkaXNwbGF5Ijoic3RhbmRhbG9uZSIsImJhY2tncm91bmRfY29sb3IiOiIjMDkwOTBiIiwidGhlbWVfY29sb3IiOiIjZjU5ZTBiIn0=">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{--bg:#09090b;--bg2:#18181b;--bg3:#27272a;--bg4:#3f3f46;--fg:#fafafa;--fg2:#a1a1aa;--fg3:#71717a;--accent:#f59e0b;--accent2:#d97706;--blue:#3b82f6;--green:#22c55e;--red:#ef4444;--purple:#8b5cf6;--pink:#ec4899;--cyan:#06b6d4;--font:'JetBrains Mono','SF Mono','Fira Code','Cascadia Code',monospace;--radius:6px;--shadow:0 4px 24px rgba(0,0,0,.4)}
@@ -64,8 +66,9 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent)}
 /* Selection */
 .selection-box{fill:rgba(245,158,11,.08);stroke:var(--accent);stroke-width:1;stroke-dasharray:4 4}
 .element-handle{fill:var(--bg);stroke:var(--accent);stroke-width:1.5;cursor:pointer}
-.connector-port{fill:var(--accent);stroke:var(--bg);stroke-width:2;opacity:0;transition:opacity .15s;cursor:crosshair}
+.connector-port{fill:var(--accent);stroke:var(--bg);stroke-width:2;opacity:.35;transition:opacity .15s;cursor:crosshair}
 .connector-port:hover{opacity:1 !important}
+.connector-port.snap-active{opacity:1;r:7}
 
 /* Minimap */
 #minimap{position:absolute;bottom:12px;right:12px;width:160px;height:100px;background:var(--bg2);border:1px solid var(--bg3);border-radius:var(--radius);overflow:hidden;z-index:10;opacity:.85}
@@ -188,7 +191,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent)}
 .lp-icon svg{width:14px;height:14px}
 
 /* Symbol library panel */
-#symbol-panel{display:none;position:absolute;left:68px;top:0;width:280px;min-width:180px;max-width:50vw;height:100%;background:var(--bg2);border-right:1px solid var(--bg3);z-index:18;box-shadow:var(--shadow);overflow:hidden;flex-direction:column;transition:left .2s}
+#symbol-panel{display:none;position:absolute;left:68px;top:0;width:340px;min-width:220px;max-width:50vw;height:100%;background:var(--bg2);border-right:1px solid var(--bg3);z-index:18;box-shadow:var(--shadow);overflow:hidden;flex-direction:column;transition:left .2s}
 #sidebar.expanded ~ #pen-panel,#sidebar.expanded ~ #shape-panel{left:252px}
 #sidebar.expanded ~ #symbol-panel{left:252px}
 .panel-resize-handle{position:absolute;right:0;top:0;width:5px;height:100%;cursor:col-resize;z-index:19;background:transparent;transition:background .15s}.panel-resize-handle:hover,.panel-resize-handle.active{background:var(--accent)}
@@ -200,7 +203,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent)}
 .sp-tab{padding:4px 10px;border-radius:4px;font-size:11px;color:var(--fg2);white-space:nowrap;cursor:pointer}
 .sp-tab:hover{background:var(--bg3)}
 .sp-tab.active{background:var(--accent);color:var(--bg)}
-.sp-grid{flex:1;overflow-y:auto;padding:8px;display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.sp-grid{flex:1;overflow-y:auto;padding:8px;display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
 .sp-item{display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px 4px;border-radius:var(--radius);cursor:grab;border:1px solid transparent;transition:all .15s}
 .sp-item:hover{background:var(--bg3);border-color:var(--bg4)}
 .sp-item svg{width:40px;height:40px}
@@ -387,6 +390,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent)}
         <button class="h-btn" onclick="app.exportPNG()" title="Export PNG"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg></button>
       </div>
       <div class="h-sep"></div>
+      <button class="h-btn" id="grid-btn" onclick="app.toggleGrid()" title="Toggle grid (G)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3h18v18H3z"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/></svg></button>
       <button class="h-btn" onclick="app.toggleLayers()" title="Layers" id="layers-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg></button>
       <button class="h-btn" data-theme-toggle onclick="app.toggleTheme()" title="Toggle theme" id="theme-btn">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3a7 7 0 0 0 9.79 9.79z"/></svg>
@@ -411,6 +415,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent)}
         <g id="canvas-grid"><rect width="99999" height="99999" x="-49999" y="-49999" fill="url(#grid-dots)"/></g>
         <g id="canvas-elements"></g>
         <g id="canvas-connectors"></g>
+        <g id="canvas-ports"></g>
         <g id="canvas-overlay"></g>
         <g id="canvas-selection"></g>
       </svg>
@@ -507,6 +512,19 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent)}
   </div>
 </div>
 
+<!-- Rename board modal -->
+<div class="modal-overlay" id="modal-rename-board">
+  <div class="modal">
+    <h3>Rename Board</h3>
+    <label>Board Name</label>
+    <input id="rename-board-input" placeholder="Board name" onkeydown="if(event.key==='Enter'){app.saveRenameBoard();event.preventDefault()}">
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="app.closeModal('modal-rename-board')">Cancel</button>
+      <button class="btn btn-primary" onclick="app.saveRenameBoard()">Save</button>
+    </div>
+  </div>
+</div>
+
 <!-- Toast container -->
 <div class="toast-container" id="toasts"></div>
 <div id="eraser-cursor"></div>
@@ -569,6 +587,8 @@ const TOOLS = [
   { sep: true },
   { id: 'text', label: 'Text', key: 'T', icon: '<path d="M4 7V4h16v3"/><path d="M9 20h6"/><path d="M12 4v16"/>' },
   { id: 'sticky', label: 'Sticky', key: 'S', icon: '<path d="M16 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8z"/><path d="M15 3v6h6"/>' },
+  { id: 'image', label: 'Image', key: 'I', icon: '<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/>' },
+  { id: 'math', label: 'Math', key: 'M', icon: '<path d="M4 20h16"/><path d="M8 4l-4 8h8"/><path d="M14 4h6M17 4v8M14 8h6"/>' },
   { sep: true },
   { id: 'eraser', label: 'Eraser', key: 'E', icon: '<path d="M7 21h10"/><path d="M5.5 13.5L12 7l5 5-6.5 6.5a2.12 2.12 0 0 1-3 0L5.5 16.5a2.12 2.12 0 0 1 0-3z"/>' },
   { sep: true },
@@ -764,6 +784,8 @@ const app = {
 
   setTool(id) {
     if (id === 'symbol') { this.toggleSymbolPanel(); return; }
+    if (id === 'image') { this.promptImageUpload(); return; }
+    if (id === 'math') { this.promptMathInput(); return; }
     // Hide symbol panel when switching away
     document.getElementById('symbol-panel').classList.remove('show');
     this.tool = id;
@@ -780,6 +802,8 @@ const app = {
     if (id === 'pen' || id === 'eraser') { this.showPenPanel(id); this.hideShapePanel(); }
     else if (['rectangle','ellipse','diamond','line','arrow','connector'].includes(id)) { this.showShapePanel(); this.hidePenPanel(); }
     else { this.hidePenPanel(); this.hideShapePanel(); }
+    // Show/hide connection ports
+    this.renderPorts();
   },
 
   // ─── Pen options panel ──────────────────────────────────
@@ -991,9 +1015,72 @@ const app = {
     document.querySelectorAll('#sp-dash-options .pp-dash-btn').forEach(b => b.classList.toggle('active', b.dataset.dash === d));
   },
 
+  // ─── Image support ─────────────────────────────────────
+  promptImageUpload() {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.onchange = () => {
+      if (input.files && input.files[0]) this.addImageFromFile(input.files[0]);
+    };
+    input.click();
+  },
+
+  addImageFromFile(file) {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const dataURL = e.target.result;
+      const img = new Image();
+      img.onload = () => {
+        const maxW = 400, maxH = 400;
+        let w = img.width, h = img.height;
+        if (w > maxW) { h *= maxW / w; w = maxW; }
+        if (h > maxH) { w *= maxH / h; h = maxH; }
+        this.pushUndo();
+        const el = this.createElement('image', this.viewport.x + 100, this.viewport.y + 100, w, h);
+        el.imageData = dataURL;
+        el.fill = 'transparent';
+        el.stroke = 'none';
+        el.strokeWidth = 0;
+        this.elements.push(el);
+        this.selection = [el.id];
+        this.render();
+        this.saveData();
+        this.toast('Image placed');
+      };
+      img.src = dataURL;
+    };
+    reader.readAsDataURL(file);
+  },
+
+  // ─── Math / LaTeX support ─────────────────────────────
+  promptMathInput() {
+    const latex = prompt('Enter LaTeX equation:', 'E = mc^2');
+    if (!latex) return;
+    this.pushUndo();
+    const el = this.createElement('math', this.viewport.x + 100, this.viewport.y + 100, 200, 60);
+    el.latex = latex;
+    el.fill = 'transparent';
+    el.stroke = 'none';
+    el.strokeWidth = 0;
+    this.elements.push(el);
+    this.selection = [el.id];
+    this.render();
+    this.saveData();
+    this.toast('Equation placed');
+  },
+
   toggleSidebar() {
     this.sidebarExpanded = !this.sidebarExpanded;
     document.getElementById('sidebar').classList.toggle('expanded', this.sidebarExpanded);
+  },
+
+  toggleGrid() {
+    this.snapToGrid = !this.snapToGrid;
+    const gridEl = document.getElementById('canvas-grid');
+    gridEl.style.display = this.snapToGrid ? '' : 'none';
+    document.getElementById('grid-btn').classList.toggle('active', this.snapToGrid);
+    this.toast(this.snapToGrid ? 'Grid: On' : 'Grid: Off');
   },
 
   // ─── Canvas coordinate transforms ───────────────────────
@@ -1111,6 +1198,20 @@ const app = {
 
     // Double click to edit
     svg.addEventListener('dblclick', (e) => this.onDblClick(e));
+
+    // Paste images from clipboard
+    document.addEventListener('paste', (e) => {
+      const items = e.clipboardData && e.clipboardData.items;
+      if (!items) return;
+      for (const item of items) {
+        if (item.type.startsWith('image/')) {
+          e.preventDefault();
+          const file = item.getAsFile();
+          this.addImageFromFile(file);
+          return;
+        }
+      }
+    });
 
     // Drag & drop symbols from symbol panel onto canvas
     svg.addEventListener('dragover', (e) => e.preventDefault());
@@ -1248,12 +1349,16 @@ const app = {
       return;
     }
 
-    // Line / Arrow / Connector
+    // Line / Arrow / Connector — snap start to nearest port
     if (['line', 'arrow', 'connector'].includes(this.tool)) {
+      const snap = this.findNearestPort(p.x, p.y, 15);
+      const sx = snap ? snap.x : p.x;
+      const sy = snap ? snap.y : p.y;
       this.drawing = {
         type: this.tool,
-        startX: p.x, startY: p.y,
-        endX: p.x, endY: p.y
+        startX: sx, startY: sy,
+        endX: sx, endY: sy,
+        startPort: snap || null,
       };
       return;
     }
@@ -1376,10 +1481,12 @@ const app = {
       return;
     }
 
-    // Drawing lines
+    // Drawing lines — snap to ports
     if (this.drawing && ['line', 'arrow', 'connector'].includes(this.drawing.type)) {
-      this.drawing.endX = p.x;
-      this.drawing.endY = p.y;
+      const snap = this.findNearestPort(p.x, p.y, 15);
+      this.drawing.endX = snap ? snap.x : p.x;
+      this.drawing.endY = snap ? snap.y : p.y;
+      this.drawing.snapPort = snap || null;
       this.renderDrawingPreview();
       return;
     }
@@ -1760,6 +1867,55 @@ const app = {
     return null;
   },
 
+  getPortPositions(el) {
+    if (['line','arrow','connector'].includes(el.type)) return [];
+    const b = this.getElementBounds(el);
+    if (el.type === 'diamond') {
+      return [
+        { x: b.x + b.w / 2, y: b.y, side: 'top' },
+        { x: b.x + b.w, y: b.y + b.h / 2, side: 'right' },
+        { x: b.x + b.w / 2, y: b.y + b.h, side: 'bottom' },
+        { x: b.x, y: b.y + b.h / 2, side: 'left' },
+      ];
+    }
+    return [
+      { x: b.x + b.w / 2, y: b.y, side: 'top' },
+      { x: b.x + b.w, y: b.y + b.h / 2, side: 'right' },
+      { x: b.x + b.w / 2, y: b.y + b.h, side: 'bottom' },
+      { x: b.x, y: b.y + b.h / 2, side: 'left' },
+    ];
+  },
+
+  findNearestPort(x, y, radius) {
+    let best = null, bestDist = radius || 15;
+    this.elements.forEach(el => {
+      if (['line','arrow','connector','freehand'].includes(el.type)) return;
+      this.getPortPositions(el).forEach(pt => {
+        const d = Math.hypot(pt.x - x, pt.y - y);
+        if (d < bestDist) { bestDist = d; best = { ...pt, elId: el.id }; }
+      });
+    });
+    return best;
+  },
+
+  renderPorts() {
+    const pg = document.getElementById('canvas-ports');
+    if (!pg) return;
+    pg.innerHTML = '';
+    if (!['line','arrow','connector'].includes(this.tool)) return;
+    this.elements.forEach(el => {
+      if (['line','arrow','connector','freehand'].includes(el.type)) return;
+      this.getPortPositions(el).forEach(pt => {
+        const c = document.createElementNS(SVG_NS, 'circle');
+        c.setAttribute('cx', pt.x);
+        c.setAttribute('cy', pt.y);
+        c.setAttribute('r', 5);
+        c.setAttribute('class', 'connector-port');
+        pg.appendChild(c);
+      });
+    });
+  },
+
   getElementBounds(el) {
     if (['line', 'arrow', 'connector'].includes(el.type)) {
       return {
@@ -1931,6 +2087,31 @@ const app = {
         fold.setAttribute('d', `M${fx},${fy} L${el.x + el.width},${fy + 16} L${fx},${fy + 16} Z`);
         fold.setAttribute('fill', 'rgba(0,0,0,.1)');
         group.appendChild(fold);
+      } else if (el.type === 'image') {
+        const img = document.createElementNS(SVG_NS, 'image');
+        img.setAttribute('x', el.x);
+        img.setAttribute('y', el.y);
+        img.setAttribute('width', el.width);
+        img.setAttribute('height', el.height);
+        img.setAttribute('href', el.imageData);
+        img.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+        group.appendChild(img);
+      } else if (el.type === 'math') {
+        const fo = document.createElementNS(SVG_NS, 'foreignObject');
+        fo.setAttribute('x', el.x);
+        fo.setAttribute('y', el.y);
+        fo.setAttribute('width', el.width);
+        fo.setAttribute('height', el.height);
+        const div = document.createElement('div');
+        div.style.cssText = `width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:${el.fontSize || 18}px;color:var(--fg);overflow:hidden;`;
+        if (window.katex) {
+          try { katex.render(el.latex || '', div, { throwOnError: false, displayMode: true }); }
+          catch(e) { div.textContent = el.latex || ''; }
+        } else {
+          div.textContent = el.latex || '';
+        }
+        fo.appendChild(div);
+        group.appendChild(fo);
       } else if (el.type === 'text') {
         // Just text, no background (or transparent bg)
         if (el.fill && el.fill !== 'transparent') {
@@ -1950,13 +2131,15 @@ const app = {
       // Text label
       if (el.text && el.type !== 'freehand') {
         const isEngSym = el.type === 'engineering-block' && el.symbolPath;
+        const symFontSize = isEngSym ? Math.max(8, Math.round((el.fontSize || 11) * (el.iconScale || 1))) : 0;
+        const symLabelH = isEngSym ? Math.max(16, symFontSize + 8) : 0;
         const fo = document.createElementNS(SVG_NS, 'foreignObject');
         fo.setAttribute('x', el.x + 4);
-        fo.setAttribute('y', isEngSym ? el.y + el.height - 24 : el.y + 4);
+        fo.setAttribute('y', isEngSym ? el.y + el.height - symLabelH : el.y + 4);
         fo.setAttribute('width', el.width - 8);
-        fo.setAttribute('height', isEngSym ? 20 : el.height - 8);
+        fo.setAttribute('height', isEngSym ? symLabelH : el.height - 8);
         const div = document.createElement('div');
-        const engStyle = isEngSym ? `font-size:11px;color:var(--fg);opacity:0.7;` : '';
+        const engStyle = isEngSym ? `font-size:${symFontSize}px;color:var(--fg);opacity:0.7;` : '';
         div.style.cssText = isEngSym
           ? `width:100%;height:100%;display:flex;align-items:center;justify-content:center;${engStyle}overflow:hidden;word-break:break-word;line-height:1.1;white-space:nowrap;text-overflow:ellipsis;`
           : `width:100%;height:100%;display:flex;align-items:center;justify-content:${el.textAlign || 'center'};font-size:${el.fontSize || 14}px;color:${el.type === 'sticky' ? '#1a1a1a' : 'var(--fg)'};overflow:hidden;word-break:break-word;line-height:1.3;white-space:pre-wrap;padding:4px;`;
@@ -2125,6 +2308,17 @@ const app = {
         line.setAttribute('marker-end', 'url(#arrow-end-accent)');
       }
       g.appendChild(line);
+      // Snap indicator
+      if (d.snapPort) {
+        const sc = document.createElementNS(SVG_NS, 'circle');
+        sc.setAttribute('cx', d.snapPort.x);
+        sc.setAttribute('cy', d.snapPort.y);
+        sc.setAttribute('r', 7);
+        sc.setAttribute('fill', 'none');
+        sc.setAttribute('stroke', 'var(--accent)');
+        sc.setAttribute('stroke-width', 2);
+        g.appendChild(sc);
+      }
     } else if (d.type === 'text') {
       const rect = document.createElementNS(SVG_NS, 'rect');
       rect.setAttribute('x', d.x);
@@ -2365,7 +2559,7 @@ const app = {
         { label: 'Fit to Screen', shortcut: 'Ctrl+0', action: () => this.fitToScreen() },
         { label: 'Reset Zoom', action: () => { this.viewport.zoom = 1; this.updateViewBox(); } },
         { sep: true },
-        { label: 'Toggle Grid', action: () => { this.snapToGrid = !this.snapToGrid; this.toast(this.snapToGrid ? 'Grid: On' : 'Grid: Off'); } },
+        { label: 'Toggle Grid', action: () => this.toggleGrid() },
       ];
       items.forEach(item => {
         if (item.sep) { const s = document.createElement('div'); s.className = 'ctx-sep'; menu.appendChild(s); return; }
@@ -2396,6 +2590,22 @@ const app = {
   editElement(id) {
     const el = this.elements.find(e => e.id === id);
     if (!el) return;
+    // Math elements: prompt for LaTeX
+    if (el.type === 'math') {
+      const newLatex = prompt('Edit LaTeX equation:', el.latex || '');
+      if (newLatex !== null && newLatex !== el.latex) {
+        this.pushUndo();
+        el.latex = newLatex;
+        this.render();
+        this.saveData();
+      }
+      return;
+    }
+    // Image elements: replace image
+    if (el.type === 'image') {
+      this.promptImageUpload();
+      return;
+    }
     this._editingId = id;
     document.getElementById('edit-text').value = el.text || '';
     document.getElementById('edit-type').value = el.type;
@@ -2531,12 +2741,21 @@ const app = {
   renameBoard() {
     const b = this.getActiveBoard();
     if (!b) return;
-    const name = prompt('Board name:', b.name);
-    if (name && name.trim()) {
-      b.name = name.trim();
-      document.getElementById('board-name').textContent = b.name;
+    document.getElementById('rename-board-input').value = b.name;
+    this.openModal('modal-rename-board');
+    setTimeout(() => document.getElementById('rename-board-input').select(), 100);
+  },
+
+  saveRenameBoard() {
+    const b = this.getActiveBoard();
+    if (!b) return;
+    const name = document.getElementById('rename-board-input').value.trim();
+    if (name) {
+      b.name = name;
+      document.getElementById('board-name').textContent = name;
       this.saveData();
     }
+    this.closeModal('modal-rename-board');
   },
 
   showNewBoardModal() {
@@ -3241,6 +3460,22 @@ const app = {
       ell.setAttribute('stroke-width', el.strokeWidth || 2);
       if (el.strokeDasharray) ell.setAttribute('stroke-dasharray', el.strokeDasharray);
       group.appendChild(ell);
+    } else if (el.type === 'image' && el.imageData) {
+      const img = document.createElementNS(SVG_NS, 'image');
+      img.setAttribute('x', el.x); img.setAttribute('y', el.y);
+      img.setAttribute('width', el.width); img.setAttribute('height', el.height);
+      img.setAttribute('href', el.imageData);
+      img.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+      group.appendChild(img);
+    } else if (el.type === 'math') {
+      const fo = document.createElementNS(SVG_NS, 'foreignObject');
+      fo.setAttribute('x', el.x); fo.setAttribute('y', el.y);
+      fo.setAttribute('width', el.width); fo.setAttribute('height', el.height);
+      const div = document.createElement('div');
+      div.style.cssText = `width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:${el.fontSize || 18}px;color:var(--fg);overflow:hidden;`;
+      if (window.katex) { try { katex.render(el.latex || '', div, { throwOnError: false, displayMode: true }); } catch(e) { div.textContent = el.latex || ''; } }
+      else { div.textContent = el.latex || ''; }
+      fo.appendChild(div); group.appendChild(fo);
     }
     if (el.text) {
       const fo = document.createElementNS(SVG_NS, 'foreignObject');
