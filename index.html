@@ -833,6 +833,7 @@ const app = {
       if (e.detail && e.detail.theme) { this.theme = e.detail.theme; this.render(); }
     });
     this.loadData();
+    this._startAutoSave();
     this.buildTools();
     this.buildTabletToolbar();
     this.buildPenPanel();
@@ -891,23 +892,45 @@ const app = {
     } catch(e) { console.warn('Failed to load data', e); }
   },
 
+  _saveDirty: false,
+
   saveData() {
+    this._saveDirty = true;
     clearTimeout(this._saveTimer);
-    this._saveTimer = setTimeout(() => {
-      // Sync current board state
-      const b = this.getActiveBoard();
-      if (b) {
-        b.elements = JSON.parse(JSON.stringify(this.elements));
-        b.viewport = { ...this.viewport };
-        b.modified = new Date().toISOString();
-      }
-      try {
-        localStorage.setItem(this.storageKey('boards'), JSON.stringify({
-          boards: this.boards,
-          activeBoardId: this.activeBoardId
-        }));
-      } catch(e) { console.warn('Save failed', e); }
-    }, 500);
+    this._saveTimer = setTimeout(() => this._flushSave(), 500);
+  },
+
+  _flushSave() {
+    if (!this._saveDirty) return;
+    this._saveDirty = false;
+    const b = this.getActiveBoard();
+    if (b) {
+      b.elements = JSON.parse(JSON.stringify(this.elements));
+      b.viewport = { ...this.viewport };
+      b.modified = new Date().toISOString();
+    }
+    try {
+      localStorage.setItem(this.storageKey('boards'), JSON.stringify({
+        boards: this.boards,
+        activeBoardId: this.activeBoardId
+      }));
+    } catch(e) { console.warn('Save failed', e); }
+  },
+
+  _startAutoSave() {
+    // Periodic auto-save every 2 seconds as a safety net
+    this._autoSaveInterval = setInterval(() => {
+      this._saveDirty = true;
+      this._flushSave();
+    }, 2000);
+    // Immediate save on tab hide or close
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) { this._saveDirty = true; this._flushSave(); }
+    });
+    window.addEventListener('beforeunload', () => {
+      this._saveDirty = true;
+      this._flushSave();
+    });
   },
 
   makeBoard(name, elements = []) {
@@ -2088,12 +2111,14 @@ const app = {
     this.viewport.x = p.x - (cx - r.left) / newZ;
     this.viewport.y = p.y - (cy - r.top) / newZ;
     this.updateViewBox();
+    this.saveData();
   },
 
   fitToScreen() {
     if (this.elements.length === 0) {
       this.viewport = { x: -500, y: -300, zoom: 1 };
       this.updateViewBox();
+      this.saveData();
       return;
     }
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
@@ -2113,6 +2138,7 @@ const app = {
     this.viewport.x = minX - pad - (svg.width / z - w) / 2;
     this.viewport.y = minY - pad - (svg.height / z - h) / 2;
     this.updateViewBox();
+    this.saveData();
   },
 
   // ─── Events ──────────────────────────────────────────────
@@ -2491,6 +2517,7 @@ const app = {
     if (this._panStart) {
       this._panStart = null;
       document.getElementById('canvas-wrap').style.cursor = this.tool === 'pan' ? 'grab' : 'default';
+      this.saveData();
     }
 
     // Finish lasso
@@ -3568,7 +3595,7 @@ const app = {
         { label: 'Select All', shortcut: 'Ctrl+A', action: () => { this.selection = this.elements.map(el => el.id); this.render(); } },
         { sep: true },
         { label: 'Fit to Screen', shortcut: 'Ctrl+0', action: () => this.fitToScreen() },
-        { label: 'Reset Zoom', action: () => { this.viewport.zoom = 1; this.updateViewBox(); } },
+        { label: 'Reset Zoom', action: () => { this.viewport.zoom = 1; this.updateViewBox(); this.saveData(); } },
         { sep: true },
         { label: 'Toggle Grid', action: () => this.toggleGrid() },
       ];
