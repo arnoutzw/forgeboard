@@ -132,6 +132,23 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent)}
 .table-preview-wrap th{background:var(--accent);color:var(--bg);padding:6px 10px;text-align:left;font-weight:600;font-size:11px}
 .table-preview-wrap td{padding:5px 10px;border-bottom:1px solid var(--bg3)}
 .table-preview-wrap tr:nth-child(even) td{background:var(--bg2)}
+/* Math / LaTeX modal */
+.math-modal{max-width:860px;min-width:640px}
+.math-layout{display:flex;gap:16px}
+.math-editor-pane{flex:3;display:flex;flex-direction:column;min-width:0}
+.math-preview-pane{flex:2;display:flex;flex-direction:column;min-width:0}
+.math-editor-pane textarea{font-family:var(--font);font-size:13px;background:var(--bg);color:var(--fg);border:1px solid var(--bg3);border-radius:var(--radius);padding:10px;resize:vertical;min-height:100px;width:100%;line-height:1.6}
+.math-preview-box{flex:1;min-height:80px;padding:16px;display:flex;align-items:center;justify-content:center;background:var(--bg);border:1px solid var(--bg3);border-radius:var(--radius);overflow:auto}
+.math-preview-box .katex{font-size:1.6em}
+.math-preview-box .math-error{color:var(--red);font-size:11px;font-family:var(--font)}
+.math-cheatsheet{margin-top:12px;max-height:200px;overflow-y:auto;border:1px solid var(--bg3);border-radius:var(--radius);padding:0}
+.math-cheatsheet summary{font-size:11px;font-weight:600;color:var(--fg2);padding:8px 10px;cursor:pointer;user-select:none;background:var(--bg2);border-radius:var(--radius)}
+.math-cheatsheet[open] summary{border-radius:var(--radius) var(--radius) 0 0}
+.math-cheatsheet-grid{display:grid;grid-template-columns:1fr;gap:0;background:var(--bg)}
+.math-cheatsheet-grid .mc-item{display:flex;align-items:center;gap:10px;padding:5px 10px;background:var(--bg);font-size:11px;cursor:pointer;transition:background .1s;border-bottom:1px solid var(--bg3)}
+.math-cheatsheet-grid .mc-item:hover{background:var(--bg2)}
+.math-cheatsheet-grid .mc-item code{font-family:var(--font);color:var(--fg2);font-size:10px;flex:1;min-width:0;max-width:55%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.math-cheatsheet-grid .mc-item .mc-render{flex-shrink:0;min-width:80px;text-align:right}
 .btn{padding:8px 16px;border-radius:var(--radius);font-size:12px;font-weight:600;transition:all .15s}
 .btn-primary{background:var(--accent);color:var(--bg)}
 .btn-primary:hover{background:var(--accent2)}
@@ -665,6 +682,30 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent)}
   </div>
 </div>
 
+<div class="modal-overlay" id="modal-math">
+  <div class="modal math-modal">
+    <h3>LaTeX Equation Editor</h3>
+    <div class="math-layout">
+      <div class="math-editor-pane">
+        <label style="margin-top:0">LaTeX Source</label>
+        <textarea id="math-input" rows="4" placeholder="Enter LaTeX equation..." oninput="app.mathUpdatePreview()">E = mc^2</textarea>
+        <details class="math-cheatsheet">
+          <summary>LaTeX Cheat Sheet</summary>
+          <div class="math-cheatsheet-grid" id="math-cheatsheet-grid"></div>
+        </details>
+      </div>
+      <div class="math-preview-pane">
+        <label style="margin-top:0">Preview</label>
+        <div class="math-preview-box" id="math-preview"></div>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="app.closeMathModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="app.saveMath()">Insert Equation</button>
+    </div>
+  </div>
+</div>
+
 <!-- Toast container -->
 <div class="toast-container" id="toasts"></div>
 <div id="eraser-cursor"></div>
@@ -777,6 +818,7 @@ const app = {
   _tableEditing: null,
   _tableData: [],
   _tableStyle: 'striped',
+  _mathEditing: null,
   isDemo: false,
   sidebarExpanded: false,
   theme: 'dark',
@@ -933,7 +975,7 @@ const app = {
   setTool(id) {
     if (id === 'symbol') { this.toggleSymbolPanel(); return; }
     if (id === 'image') { this.promptImageUpload(); return; }
-    if (id === 'math') { this.promptMathInput(); return; }
+    if (id === 'math') { this.openMathModal(); return; }
     if (id === 'chart') { this.openChartModal(); return; }
     if (id === 'table') { this.openTableModal(); return; }
     // Hide symbol panel when switching away
@@ -1204,20 +1246,152 @@ const app = {
   },
 
   // ─── Math / LaTeX support ─────────────────────────────
-  promptMathInput() {
-    const latex = prompt('Enter LaTeX equation:', 'E = mc^2');
+  _mathCheatsheet: [
+    { label: 'Fraction', tex: '\\frac{a}{b}' },
+    { label: 'Square root', tex: '\\sqrt{x}' },
+    { label: 'Nth root', tex: '\\sqrt[n]{x}' },
+    { label: 'Superscript', tex: 'x^{2}' },
+    { label: 'Subscript', tex: 'x_{i}' },
+    { label: 'Sum', tex: '\\sum_{i=0}^{n} x_i' },
+    { label: 'Product', tex: '\\prod_{i=1}^{n} x_i' },
+    { label: 'Integral', tex: '\\int_{a}^{b} f(x)\\,dx' },
+    { label: 'Limit', tex: '\\lim_{x \\to \\infty} f(x)' },
+    { label: 'Infinity', tex: '\\infty' },
+    { label: 'Greek α β γ', tex: '\\alpha, \\beta, \\gamma' },
+    { label: 'Greek θ λ π', tex: '\\theta, \\lambda, \\pi' },
+    { label: 'Greek Σ Δ Ω', tex: '\\Sigma, \\Delta, \\Omega' },
+    { label: 'Not equal', tex: '\\neq' },
+    { label: 'Less/greater eq', tex: '\\leq, \\geq' },
+    { label: 'Approx', tex: '\\approx' },
+    { label: 'Plus-minus', tex: '\\pm' },
+    { label: 'Times / dot', tex: '\\times, \\cdot' },
+    { label: 'Division', tex: '\\div' },
+    { label: 'Matrix 2×2', tex: '\\begin{pmatrix} a & b \\\\ c & d \\end{pmatrix}' },
+    { label: 'Cases', tex: 'f(x) = \\begin{cases} 1 & x > 0 \\\\ 0 & x = 0 \\end{cases}' },
+    { label: 'Binomial', tex: '\\binom{n}{k}' },
+    { label: 'Overline', tex: '\\overline{AB}' },
+    { label: 'Vector', tex: '\\vec{v}' },
+    { label: 'Hat', tex: '\\hat{x}' },
+    { label: 'Dot (derivative)', tex: '\\dot{x}, \\ddot{x}' },
+    { label: 'Partial', tex: '\\frac{\\partial f}{\\partial x}' },
+    { label: 'Nabla', tex: '\\nabla' },
+    { label: 'Set membership', tex: '\\in, \\notin, \\subset' },
+    { label: 'Union / intersect', tex: '\\cup, \\cap' },
+    { label: 'For all / exists', tex: '\\forall, \\exists' },
+    { label: 'Arrow right', tex: '\\rightarrow, \\Rightarrow' },
+    { label: 'Arrow left-right', tex: '\\leftrightarrow' },
+    { label: 'Text in math', tex: '\\text{where } x > 0' },
+    { label: 'Aligned eqs', tex: '\\begin{aligned} a &= b + c \\\\ d &= e + f \\end{aligned}' },
+    { label: 'Underbrace', tex: '\\underbrace{a+b+c}_{\\text{sum}}' },
+  ],
+
+  openMathModal(existingEl) {
+    const input = document.getElementById('math-input');
+    const btn = document.querySelector('#modal-math .btn-primary');
+    if (existingEl && existingEl.latex !== undefined) {
+      this._mathEditing = existingEl.id;
+      input.value = existingEl.latex || '';
+      btn.textContent = 'Update Equation';
+    } else {
+      this._mathEditing = null;
+      input.value = 'E = mc^2';
+      btn.textContent = 'Insert Equation';
+    }
+    this._mathBuildCheatsheet();
+    this.openModal('modal-math');
+    this.mathUpdatePreview();
+    // Focus textarea after modal animation
+    setTimeout(() => input.focus(), 100);
+  },
+
+  closeMathModal() {
+    this.closeModal('modal-math');
+    this._mathEditing = null;
+  },
+
+  _mathBuildCheatsheet() {
+    const grid = document.getElementById('math-cheatsheet-grid');
+    if (grid.children.length > 0) return; // already built
+    for (const item of this._mathCheatsheet) {
+      const div = document.createElement('div');
+      div.className = 'mc-item';
+      div.title = item.tex;
+      const code = document.createElement('code');
+      code.textContent = item.tex;
+      const render = document.createElement('span');
+      render.className = 'mc-render';
+      if (window.katex) {
+        try { katex.render(item.tex, render, { throwOnError: false, displayMode: false }); }
+        catch(e) { render.textContent = '?'; }
+      }
+      div.appendChild(code);
+      div.appendChild(render);
+      div.addEventListener('click', () => {
+        const ta = document.getElementById('math-input');
+        const start = ta.selectionStart;
+        const end = ta.selectionEnd;
+        const before = ta.value.substring(0, start);
+        const after = ta.value.substring(end);
+        ta.value = before + item.tex + after;
+        ta.focus();
+        const newPos = start + item.tex.length;
+        ta.setSelectionRange(newPos, newPos);
+        this.mathUpdatePreview();
+      });
+      grid.appendChild(div);
+    }
+  },
+
+  mathUpdatePreview() {
+    const latex = document.getElementById('math-input').value.trim();
+    const preview = document.getElementById('math-preview');
+    preview.innerHTML = '';
+    if (!latex) {
+      preview.innerHTML = '<span style="color:var(--fg3);font-size:12px">Type LaTeX above to preview</span>';
+      return;
+    }
+    if (window.katex) {
+      try {
+        katex.render(latex, preview, { throwOnError: true, displayMode: true });
+      } catch (e) {
+        const errDiv = document.createElement('div');
+        errDiv.className = 'math-error';
+        errDiv.textContent = e.message || 'Invalid LaTeX';
+        preview.appendChild(errDiv);
+      }
+    } else {
+      preview.textContent = latex;
+    }
+  },
+
+  saveMath() {
+    const latex = document.getElementById('math-input').value.trim();
     if (!latex) return;
-    this.pushUndo();
-    const el = this.createElement('math', this.viewport.x + 100, this.viewport.y + 100, 200, 60);
-    el.latex = latex;
-    el.fill = 'transparent';
-    el.stroke = 'none';
-    el.strokeWidth = 0;
-    this.elements.push(el);
-    this.selection = [el.id];
-    this.render();
-    this.saveData();
-    this.toast('Equation placed');
+    if (this._mathEditing) {
+      // Editing existing equation
+      const el = this.elements.find(e => e.id === this._mathEditing);
+      if (el && el.latex !== latex) {
+        this.pushUndo();
+        el.latex = latex;
+        this.render();
+        this.saveData();
+      }
+    } else {
+      // Insert new equation
+      this.pushUndo();
+      const el = this.createElement('math', this.viewport.x + 100, this.viewport.y + 100, 200, 60);
+      el.latex = latex;
+      el.fontSize = 18;
+      el.fill = 'transparent';
+      el.stroke = 'none';
+      el.strokeWidth = 0;
+      this.elements.push(el);
+      this.selection = [el.id];
+      this.render();
+      this.saveData();
+      this.toast('Equation placed');
+    }
+    this.closeMathModal();
   },
 
   // ─── Chart / Plotly support ─────────────────────────────
@@ -2068,12 +2242,22 @@ const app = {
     }
 
     if (this.tool === 'select') {
+      // First check if clicking on edge/handle of a selected element
+      for (const id of this.selection) {
+        const sel = this.elements.find(e => e.id === id);
+        if (!sel) continue;
+        const handle = this.hitResizeHandle(p.x, p.y, sel);
+        if (handle) {
+          this.resizing = { el: sel, handle, startX: p.x, startY: p.y, orig: { x: sel.x, y: sel.y, width: sel.width || 0, height: sel.height || 0, fontSize: sel.fontSize } };
+          return;
+        }
+      }
       const hit = this.hitTest(p.x, p.y);
       if (hit) {
-        // Check if clicking a resize handle
+        // Check if clicking a resize handle of hit element
         const handle = this.hitResizeHandle(p.x, p.y, hit);
         if (handle) {
-          this.resizing = { el: hit, handle, startX: p.x, startY: p.y, orig: { x: hit.x, y: hit.y, width: hit.width || 0, height: hit.height || 0 } };
+          this.resizing = { el: hit, handle, startX: p.x, startY: p.y, orig: { x: hit.x, y: hit.y, width: hit.width || 0, height: hit.height || 0, fontSize: hit.fontSize } };
           return;
         }
         if (!e.shiftKey && !this.selection.includes(hit.id)) {
@@ -2234,6 +2418,11 @@ const app = {
       if (handle.includes('b')) { el.height = Math.max(20, this.snapVal(orig.height + dy)); }
       if (handle.includes('l')) { el.x = this.snapVal(orig.x + dx); el.width = Math.max(20, this.snapVal(orig.width - dx)); }
       if (handle.includes('t')) { el.y = this.snapVal(orig.y + dy); el.height = Math.max(20, this.snapVal(orig.height - dy)); }
+      // Scale font size proportionally for math elements
+      if (el.type === 'math' && orig.height > 0) {
+        const scale = el.height / orig.height;
+        el.fontSize = Math.max(8, Math.round((orig.fontSize || 18) * scale));
+      }
       this.render();
       return;
     }
@@ -2268,6 +2457,25 @@ const app = {
       this.drawing.snapPort = snap || null;
       this.renderDrawingPreview();
       return;
+    }
+
+    // Hover cursor for resize edges/handles
+    if (this.tool === 'select' && this.selection.length > 0 && !this.dragging) {
+      const wrap = document.getElementById('canvas-wrap');
+      let cursor = 'default';
+      for (const id of this.selection) {
+        const el = this.elements.find(e => e.id === id);
+        if (!el) continue;
+        const h = this.hitResizeHandle(p.x, p.y, el);
+        if (h) {
+          if (h === 'tl' || h === 'br') cursor = 'nwse-resize';
+          else if (h === 'tr' || h === 'bl') cursor = 'nesw-resize';
+          else if (h === 't' || h === 'b') cursor = 'ns-resize';
+          else if (h === 'l' || h === 'r') cursor = 'ew-resize';
+          break;
+        }
+      }
+      wrap.style.cursor = cursor;
     }
   },
 
@@ -2637,20 +2845,27 @@ const app = {
   hitResizeHandle(x, y, el) {
     if (['line', 'arrow', 'connector', 'freehand'].includes(el.type)) return null;
     const b = this.getElementBounds(el);
+    const pad = 4;
+    const bx = b.x - pad, by = b.y - pad, bw = b.w + pad * 2, bh = b.h + pad * 2;
     const hs = 6 / this.viewport.zoom;
-    const handles = [
-      { name: 'tl', x: b.x, y: b.y },
-      { name: 'tr', x: b.x + b.w, y: b.y },
-      { name: 'bl', x: b.x, y: b.y + b.h },
-      { name: 'br', x: b.x + b.w, y: b.y + b.h },
-      { name: 'r', x: b.x + b.w, y: b.y + b.h / 2 },
-      { name: 'b', x: b.x + b.w / 2, y: b.y + b.h },
-      { name: 'l', x: b.x, y: b.y + b.h / 2 },
-      { name: 't', x: b.x + b.w / 2, y: b.y },
+    // Corner handles (highest priority)
+    const corners = [
+      { name: 'tl', x: bx, y: by },
+      { name: 'tr', x: bx + bw, y: by },
+      { name: 'bl', x: bx, y: by + bh },
+      { name: 'br', x: bx + bw, y: by + bh },
     ];
-    for (const h of handles) {
+    for (const h of corners) {
       if (Math.abs(x - h.x) < hs && Math.abs(y - h.y) < hs) return h.name;
     }
+    // Edge detection — dragging the dashed border
+    const et = 5 / this.viewport.zoom; // edge tolerance
+    const inX = x >= bx - et && x <= bx + bw + et;
+    const inY = y >= by - et && y <= by + bh + et;
+    if (inX && Math.abs(y - by) < et) return 't';
+    if (inX && Math.abs(y - (by + bh)) < et) return 'b';
+    if (inY && Math.abs(x - bx) < et) return 'l';
+    if (inY && Math.abs(x - (bx + bw)) < et) return 'r';
     return null;
   },
 
@@ -3386,15 +3601,9 @@ const app = {
   editElement(id) {
     const el = this.elements.find(e => e.id === id);
     if (!el) return;
-    // Math elements: prompt for LaTeX
+    // Math elements: open LaTeX editor modal
     if (el.type === 'math') {
-      const newLatex = prompt('Edit LaTeX equation:', el.latex || '');
-      if (newLatex !== null && newLatex !== el.latex) {
-        this.pushUndo();
-        el.latex = newLatex;
-        this.render();
-        this.saveData();
-      }
+      this.openMathModal(el);
       return;
     }
     // Image elements: replace image
