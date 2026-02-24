@@ -1226,7 +1226,7 @@ const app = {
     // Eraser cursor
     const ec = document.getElementById('eraser-cursor');
     if (this.tool === 'eraser') {
-      const sz = this.eraserRadius * 2;
+      const sz = this.eraserRadius * 2 * this.viewport.zoom;
       ec.style.display = 'block';
       ec.style.width = sz + 'px';
       ec.style.height = sz + 'px';
@@ -1489,6 +1489,16 @@ const app = {
   },
 
   onDrawMove(e) {
+    // Update eraser cursor on draw canvas
+    if (this.tool === 'eraser') {
+      const ec = document.getElementById('eraser-cursor');
+      const sz = this.eraserRadius * 2 * this.viewport.zoom;
+      ec.style.display = 'block';
+      ec.style.width = sz + 'px';
+      ec.style.height = sz + 'px';
+      ec.style.left = e.clientX + 'px';
+      ec.style.top = e.clientY + 'px';
+    }
     if (e.pointerType === 'touch' && this._panStart) {
       const dx = (e.clientX - this._panStart.x) / this.viewport.zoom;
       const dy = (e.clientY - this._panStart.y) / this.viewport.zoom;
