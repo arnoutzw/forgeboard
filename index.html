@@ -109,8 +109,8 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent)}
 .color-swatch:hover,.color-swatch.active{border-color:var(--fg)}
 
 /* Pen options panel */
-#pen-panel{display:none;position:absolute;left:68px;top:0;width:220px;height:100%;background:var(--bg2);border-right:1px solid var(--bg3);z-index:17;box-shadow:var(--shadow);overflow-y:auto;flex-direction:column}
-#pen-panel.show{display:flex}
+#pen-panel,#shape-panel{display:none;position:absolute;left:68px;top:0;width:220px;height:100%;background:var(--bg2);border-right:1px solid var(--bg3);z-index:17;box-shadow:var(--shadow);overflow-y:auto;flex-direction:column;transition:left .2s}
+#pen-panel.show,#shape-panel.show{display:flex}
 .pp-section{padding:10px 14px;border-bottom:1px solid var(--bg3)}
 .pp-section:last-child{border-bottom:none}
 .pp-label{font-size:11px;color:var(--fg3);margin-bottom:6px;display:block;font-weight:500}
@@ -181,7 +181,9 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent)}
 .lp-icon svg{width:14px;height:14px}
 
 /* Symbol library panel */
-#symbol-panel{display:none;position:absolute;left:68px;top:0;width:280px;min-width:180px;max-width:50vw;height:100%;background:var(--bg2);border-right:1px solid var(--bg3);z-index:18;box-shadow:var(--shadow);overflow:hidden;flex-direction:column}
+#symbol-panel{display:none;position:absolute;left:68px;top:0;width:280px;min-width:180px;max-width:50vw;height:100%;background:var(--bg2);border-right:1px solid var(--bg3);z-index:18;box-shadow:var(--shadow);overflow:hidden;flex-direction:column;transition:left .2s}
+#sidebar.expanded ~ #pen-panel,#sidebar.expanded ~ #shape-panel{left:252px}
+#sidebar.expanded ~ #symbol-panel{left:252px}
 .panel-resize-handle{position:absolute;right:0;top:0;width:5px;height:100%;cursor:col-resize;z-index:19;background:transparent;transition:background .15s}.panel-resize-handle:hover,.panel-resize-handle.active{background:var(--accent)}
 #symbol-panel.show{display:flex}
 .sp-header{padding:12px;border-bottom:1px solid var(--bg3)}
@@ -305,6 +307,25 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent)}
       <div class="pp-slider-row">
         <input type="range" id="pp-eraser-radius" min="5" max="80" value="20" oninput="app.setEraserRadius(+this.value)">
         <span class="pp-slider-val" id="pp-eraser-val">20px</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Shape options panel -->
+  <div id="shape-panel">
+    <div class="pp-section">
+      <span class="pp-label">Fill</span>
+      <div class="pp-colors" id="sp-fill-grid"></div>
+    </div>
+    <div class="pp-section">
+      <span class="pp-label">Stroke</span>
+      <div class="pp-colors" id="sp-stroke-grid"></div>
+    </div>
+    <div class="pp-section">
+      <span class="pp-label">Stroke Width</span>
+      <div class="pp-slider-row">
+        <input type="range" id="sp-stroke-width" min="0" max="8" value="2" oninput="app.setShapeStrokeWidth(+this.value)">
+        <span class="pp-slider-val" id="sp-stroke-width-val">2px</span>
       </div>
     </div>
   </div>
@@ -555,6 +576,9 @@ const app = {
   penMode: 'pen',
   penSmoothing: true,
   eraserRadius: 20,
+  shapeFill: null,
+  shapeStroke: null,
+  shapeStrokeWidth: 2,
   isDemo: false,
   sidebarExpanded: false,
   theme: 'dark',
@@ -572,6 +596,7 @@ const app = {
     this.buildTools();
     this.buildTabletToolbar();
     this.buildPenPanel();
+    this.buildShapePanel();
     this.bindEvents();
     this.detectEink();
     this.initSymbolPanel();
@@ -722,8 +747,9 @@ const app = {
     // Show/hide draw canvas
     document.getElementById('draw-canvas').style.pointerEvents = (id === 'pen' || id === 'eraser') ? 'auto' : 'none';
     // Show/hide pen panel
-    if (id === 'pen' || id === 'eraser') this.showPenPanel(id);
-    else this.hidePenPanel();
+    if (id === 'pen' || id === 'eraser') { this.showPenPanel(id); this.hideShapePanel(); }
+    else if (['rectangle','ellipse','diamond','line','arrow','connector'].includes(id)) { this.showShapePanel(); this.hidePenPanel(); }
+    else { this.hidePenPanel(); this.hideShapePanel(); }
   },
 
   // ─── Pen options panel ──────────────────────────────────
@@ -850,6 +876,83 @@ const app = {
     const computed = getComputedStyle(tmp).color;
     document.body.removeChild(tmp);
     return rgb === computed;
+  },
+
+  // ─── Shape options panel ──────────────────────────────
+  buildShapePanel() {
+    const fillGrid = document.getElementById('sp-fill-grid');
+    const strokeGrid = document.getElementById('sp-stroke-grid');
+    // Fill swatches
+    SHAPE_FILLS.forEach(c => {
+      const sw = document.createElement('div');
+      sw.className = 'pp-swatch';
+      sw.style.background = c === 'transparent' ? 'linear-gradient(45deg,#ccc 25%,transparent 25%,transparent 75%,#ccc 75%),linear-gradient(45deg,#ccc 25%,transparent 25%,transparent 75%,#ccc 75%)' : c;
+      if (c === 'transparent') { sw.style.backgroundSize = '8px 8px'; sw.style.backgroundPosition = '0 0,4px 4px'; }
+      sw.dataset.color = c;
+      sw.onclick = () => this.setShapeFill(c);
+      fillGrid.appendChild(sw);
+    });
+    // Custom fill picker
+    const customFill = document.createElement('input');
+    customFill.type = 'color';
+    customFill.className = 'pp-custom-color';
+    customFill.value = '#292524';
+    customFill.title = 'Custom fill';
+    customFill.oninput = () => this.setShapeFill(customFill.value);
+    fillGrid.appendChild(customFill);
+    // Stroke swatches
+    STROKE_COLORS.forEach(c => {
+      const sw = document.createElement('div');
+      sw.className = 'pp-swatch';
+      sw.style.background = c;
+      sw.dataset.color = c;
+      sw.onclick = () => this.setShapeStroke(c);
+      strokeGrid.appendChild(sw);
+    });
+    // Custom stroke picker
+    const customStroke = document.createElement('input');
+    customStroke.type = 'color';
+    customStroke.className = 'pp-custom-color';
+    customStroke.value = '#f59e0b';
+    customStroke.title = 'Custom stroke';
+    customStroke.oninput = () => this.setShapeStroke(customStroke.value);
+    strokeGrid.appendChild(customStroke);
+  },
+
+  showShapePanel() {
+    const panel = document.getElementById('shape-panel');
+    // Sync controls
+    document.getElementById('sp-stroke-width').value = this.shapeStrokeWidth;
+    document.getElementById('sp-stroke-width-val').textContent = this.shapeStrokeWidth + 'px';
+    // Highlight active swatches
+    const currentFill = this.shapeFill || this._themeBg2();
+    const currentStroke = this.shapeStroke || this._themeAccent();
+    document.querySelectorAll('#sp-fill-grid .pp-swatch').forEach(s => s.classList.toggle('active', s.dataset.color === currentFill || this.rgbMatch(s.style.background, currentFill)));
+    document.querySelectorAll('#sp-stroke-grid .pp-swatch').forEach(s => s.classList.toggle('active', s.dataset.color === currentStroke || this.rgbMatch(s.style.background, currentStroke)));
+    panel.classList.add('show');
+  },
+
+  hideShapePanel() {
+    document.getElementById('shape-panel').classList.remove('show');
+  },
+
+  setShapeFill(c) {
+    this.shapeFill = c;
+    document.querySelectorAll('#sp-fill-grid .pp-swatch').forEach(s => s.classList.toggle('active', s.dataset.color === c || this.rgbMatch(s.style.background, c)));
+    const custom = document.querySelector('#sp-fill-grid .pp-custom-color');
+    if (custom && c.startsWith('#')) custom.value = c;
+  },
+
+  setShapeStroke(c) {
+    this.shapeStroke = c;
+    document.querySelectorAll('#sp-stroke-grid .pp-swatch').forEach(s => s.classList.toggle('active', s.dataset.color === c || this.rgbMatch(s.style.background, c)));
+    const custom = document.querySelector('#sp-stroke-grid .pp-custom-color');
+    if (custom && c.startsWith('#')) custom.value = c;
+  },
+
+  setShapeStrokeWidth(w) {
+    this.shapeStrokeWidth = w;
+    document.getElementById('sp-stroke-width-val').textContent = w + 'px';
   },
 
   toggleSidebar() {
@@ -1519,6 +1622,7 @@ const app = {
   createElement(type, x, y, w, h) {
     const accentColor = this._themeAccent();
     const bgColor = this._themeBg2();
+    const isShape = ['rectangle','ellipse','diamond','line','arrow','connector'].includes(type);
     return {
       id: uid(),
       type,
@@ -1526,9 +1630,9 @@ const app = {
       width: w,
       height: h,
       rotation: 0,
-      fill: type === 'text' ? 'transparent' : bgColor,
-      stroke: accentColor,
-      strokeWidth: 2,
+      fill: type === 'text' ? 'transparent' : (isShape && this.shapeFill != null ? this.shapeFill : bgColor),
+      stroke: isShape && this.shapeStroke != null ? this.shapeStroke : accentColor,
+      strokeWidth: isShape ? this.shapeStrokeWidth : 2,
       text: '',
       fontSize: 14,
       textAlign: 'center',
