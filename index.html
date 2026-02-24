@@ -709,6 +709,8 @@ const app = {
 
   setTool(id) {
     if (id === 'symbol') { this.toggleSymbolPanel(); return; }
+    // Hide symbol panel when switching away
+    document.getElementById('symbol-panel').classList.remove('show');
     this.tool = id;
     document.querySelectorAll('.sb-tool[data-tool],.tb-tool[data-tool]').forEach(b => {
       b.classList.toggle('active', b.dataset.tool === id);
