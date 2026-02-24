@@ -130,6 +130,13 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent)}
 .pp-toggle{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--fg2);cursor:pointer;margin-top:4px}
 .pp-toggle:first-child{margin-top:0}
 .pp-toggle input{accent-color:var(--accent)}
+.pp-dash-options{display:flex;gap:4px}
+.pp-dash-btn{flex:1;height:28px;border-radius:6px;border:1px solid var(--bg3);background:transparent;cursor:pointer;padding:4px 6px;display:flex;align-items:center;justify-content:center;transition:all .15s}
+.pp-dash-btn:hover{background:var(--bg3)}
+.pp-dash-btn.active{background:var(--accent);border-color:var(--accent)}
+.pp-dash-btn svg{width:100%;height:4px}
+.pp-dash-btn line{stroke:var(--fg2);stroke-width:2}
+.pp-dash-btn.active line{stroke:var(--bg)}
 #eraser-cursor{position:fixed;pointer-events:none;border:2px solid var(--fg2);border-radius:50%;z-index:30;display:none;transform:translate(-50%,-50%)}
 
 /* Properties bar (bottom) */
@@ -326,6 +333,23 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent)}
       <div class="pp-slider-row">
         <input type="range" id="sp-stroke-width" min="0" max="8" value="2" oninput="app.setShapeStrokeWidth(+this.value)">
         <span class="pp-slider-val" id="sp-stroke-width-val">2px</span>
+      </div>
+    </div>
+    <div class="pp-section">
+      <span class="pp-label">Line Style</span>
+      <div class="pp-dash-options" id="sp-dash-options">
+        <button class="pp-dash-btn active" data-dash="" onclick="app.setShapeStrokeDash('')" title="Solid">
+          <svg viewBox="0 0 40 4"><line x1="0" y1="2" x2="40" y2="2"/></svg>
+        </button>
+        <button class="pp-dash-btn" data-dash="8 4" onclick="app.setShapeStrokeDash('8 4')" title="Dashed">
+          <svg viewBox="0 0 40 4"><line x1="0" y1="2" x2="40" y2="2" stroke-dasharray="8 4"/></svg>
+        </button>
+        <button class="pp-dash-btn" data-dash="3 3" onclick="app.setShapeStrokeDash('3 3')" title="Dotted">
+          <svg viewBox="0 0 40 4"><line x1="0" y1="2" x2="40" y2="2" stroke-dasharray="3 3"/></svg>
+        </button>
+        <button class="pp-dash-btn" data-dash="12 4 3 4" onclick="app.setShapeStrokeDash('12 4 3 4')" title="Dash-dot">
+          <svg viewBox="0 0 40 4"><line x1="0" y1="2" x2="40" y2="2" stroke-dasharray="12 4 3 4"/></svg>
+        </button>
       </div>
     </div>
   </div>
@@ -579,6 +603,7 @@ const app = {
   shapeFill: null,
   shapeStroke: null,
   shapeStrokeWidth: 2,
+  shapeStrokeDash: '',
   isDemo: false,
   sidebarExpanded: false,
   theme: 'dark',
@@ -929,6 +954,7 @@ const app = {
     const currentStroke = this.shapeStroke || this._themeAccent();
     document.querySelectorAll('#sp-fill-grid .pp-swatch').forEach(s => s.classList.toggle('active', s.dataset.color === currentFill || this.rgbMatch(s.style.background, currentFill)));
     document.querySelectorAll('#sp-stroke-grid .pp-swatch').forEach(s => s.classList.toggle('active', s.dataset.color === currentStroke || this.rgbMatch(s.style.background, currentStroke)));
+    document.querySelectorAll('#sp-dash-options .pp-dash-btn').forEach(b => b.classList.toggle('active', b.dataset.dash === this.shapeStrokeDash));
     panel.classList.add('show');
   },
 
@@ -953,6 +979,11 @@ const app = {
   setShapeStrokeWidth(w) {
     this.shapeStrokeWidth = w;
     document.getElementById('sp-stroke-width-val').textContent = w + 'px';
+  },
+
+  setShapeStrokeDash(d) {
+    this.shapeStrokeDash = d;
+    document.querySelectorAll('#sp-dash-options .pp-dash-btn').forEach(b => b.classList.toggle('active', b.dataset.dash === d));
   },
 
   toggleSidebar() {
@@ -1643,6 +1674,7 @@ const app = {
       fill: type === 'text' ? 'transparent' : (isShape && this.shapeFill != null ? this.shapeFill : bgColor),
       stroke: isShape && this.shapeStroke != null ? this.shapeStroke : accentColor,
       strokeWidth: isShape ? this.shapeStrokeWidth : 2,
+      strokeDasharray: isShape ? this.shapeStrokeDash : '',
       text: '',
       fontSize: 14,
       textAlign: 'center',
@@ -1799,6 +1831,7 @@ const app = {
         rect.setAttribute('fill', isSymbol ? 'var(--bg)' : (el.fill || this._themeBg2()));
         rect.setAttribute('stroke', isSymbol ? 'none' : (el.stroke || this._themeAccent()));
         rect.setAttribute('stroke-width', isSymbol ? 0 : (el.strokeWidth || 2));
+        if (!isSymbol && el.strokeDasharray) rect.setAttribute('stroke-dasharray', el.strokeDasharray);
         group.appendChild(rect);
 
         // Render SVG symbol schematic inside engineering blocks
@@ -1859,6 +1892,7 @@ const app = {
         ell.setAttribute('fill', el.fill || this._themeBg2());
         ell.setAttribute('stroke', el.stroke || this._themeAccent());
         ell.setAttribute('stroke-width', el.strokeWidth || 2);
+        if (el.strokeDasharray) ell.setAttribute('stroke-dasharray', el.strokeDasharray);
         group.appendChild(ell);
       } else if (el.type === 'diamond') {
         const cx = el.x + el.width / 2;
@@ -1868,6 +1902,7 @@ const app = {
         poly.setAttribute('fill', el.fill || this._themeBg2());
         poly.setAttribute('stroke', el.stroke || this._themeAccent());
         poly.setAttribute('stroke-width', el.strokeWidth || 2);
+        if (el.strokeDasharray) poly.setAttribute('stroke-dasharray', el.strokeDasharray);
         group.appendChild(poly);
       } else if (el.type === 'sticky') {
         const rect = document.createElementNS(SVG_NS, 'rect');
@@ -1938,7 +1973,8 @@ const app = {
       path.setAttribute('data-id', el.id);
       path.style.opacity = el.opacity || 1;
       if (el.type === 'arrow' || el.type === 'connector') path.setAttribute('marker-end', 'url(#arrow-end)');
-      if (el.type === 'connector') path.setAttribute('stroke-dasharray', '6 3');
+      const pathDash = el.strokeDasharray || (el.type === 'connector' ? '6 3' : '');
+      if (pathDash) path.setAttribute('stroke-dasharray', pathDash);
       container.appendChild(path);
     } else {
       const line = document.createElementNS(SVG_NS, 'line');
@@ -1951,7 +1987,8 @@ const app = {
       line.setAttribute('data-id', el.id);
       line.style.opacity = el.opacity || 1;
       if (el.type === 'arrow' || el.type === 'connector') line.setAttribute('marker-end', 'url(#arrow-end)');
-      if (el.type === 'connector') line.setAttribute('stroke-dasharray', '6 3');
+      const lineDash = el.strokeDasharray || (el.type === 'connector' ? '6 3' : '');
+      if (lineDash) line.setAttribute('stroke-dasharray', lineDash);
       container.appendChild(line);
     }
 
@@ -3140,6 +3177,7 @@ const app = {
       rect.setAttribute('fill', isSymbol ? 'var(--bg)' : (el.fill || this._themeBg2()));
       rect.setAttribute('stroke', isSymbol ? 'none' : (el.stroke || this._themeAccent()));
       rect.setAttribute('stroke-width', isSymbol ? 0 : (el.strokeWidth || 2));
+      if (!isSymbol && el.strokeDasharray) rect.setAttribute('stroke-dasharray', el.strokeDasharray);
       group.appendChild(rect);
       if (isSymbol && el.symbolPath) {
         const pad = 8, labelH = el.text ? 20 : 0;
@@ -3169,6 +3207,7 @@ const app = {
       ell.setAttribute('fill', el.fill || this._themeBg2());
       ell.setAttribute('stroke', el.stroke || this._themeAccent());
       ell.setAttribute('stroke-width', el.strokeWidth || 2);
+      if (el.strokeDasharray) ell.setAttribute('stroke-dasharray', el.strokeDasharray);
       group.appendChild(ell);
     }
     if (el.text) {
