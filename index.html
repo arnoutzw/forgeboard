@@ -157,7 +157,8 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent)}
 .lp-icon svg{width:14px;height:14px}
 
 /* Symbol library panel */
-#symbol-panel{display:none;position:absolute;left:68px;top:0;width:280px;height:100%;background:var(--bg2);border-right:1px solid var(--bg3);z-index:18;box-shadow:var(--shadow);overflow:hidden;flex-direction:column}
+#symbol-panel{display:none;position:absolute;left:68px;top:0;width:280px;min-width:180px;max-width:50vw;height:100%;background:var(--bg2);border-right:1px solid var(--bg3);z-index:18;box-shadow:var(--shadow);overflow:hidden;flex-direction:column}
+.panel-resize-handle{position:absolute;right:0;top:0;width:5px;height:100%;cursor:col-resize;z-index:19;background:transparent;transition:background .15s}.panel-resize-handle:hover,.panel-resize-handle.active{background:var(--accent)}
 #symbol-panel.show{display:flex}
 .sp-header{padding:12px;border-bottom:1px solid var(--bg3)}
 .sp-header h4{font-size:13px;font-weight:600;margin-bottom:8px}
@@ -202,6 +203,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent)}
     <div class="sp-header"><h4>Engineering Symbols</h4><input class="sp-search" id="symbol-search" placeholder="Search symbols..." oninput="app.filterSymbols(this.value)"></div>
     <div class="sp-tabs" id="symbol-tabs"></div>
     <div class="sp-grid" id="symbol-grid"></div>
+    <div class="panel-resize-handle" id="symbol-resize"></div>
   </div>
 
   <!-- Main -->
@@ -428,6 +430,7 @@ const app = {
     this.bindEvents();
     this.detectEink();
     this.initSymbolPanel();
+    this.initPanelResize();
     this.resizeCanvas();
     this.render();
     if (this.isDemo) {
@@ -693,6 +696,38 @@ const app = {
 
     // Double click to edit
     svg.addEventListener('dblclick', (e) => this.onDblClick(e));
+
+    // Drag & drop symbols from symbol panel onto canvas
+    svg.addEventListener('dragover', (e) => e.preventDefault());
+    svg.addEventListener('drop', (e) => {
+      e.preventDefault();
+      try {
+        const data = JSON.parse(e.dataTransfer.getData('text/plain'));
+        if (data.type === 'symbol') {
+          const rect = svg.getBoundingClientRect();
+          const mx = (e.clientX - rect.left) / this.zoom - this.viewport.x;
+          const my = (e.clientY - rect.top) / this.zoom - this.viewport.y;
+          const symbols = this.SYMBOLS[data.cat];
+          if (symbols && symbols[data.idx]) {
+            const s = symbols[data.idx];
+            this.pushUndo();
+            const el = this.createElement('engineering-block', mx - 60, my - 40, 120, 80);
+            el.text = s.name;
+            el.symbolPath = s.path;
+            el.symbolExtra = s.extra || '';
+            el.symbolLabel = s.label || '';
+            el.symbolCircle = s.circle || false;
+            el.symbolFill = s.fillColor || '';
+            el.symbolDash = s.dasharray || '';
+            this.elements.push(el);
+            this.selection = [el.id];
+            this.render();
+            this.saveData();
+            this.toast(`Placed: ${s.name}`);
+          }
+        }
+      } catch(err) {}
+    });
 
     // Touch gestures (2-finger zoom handled by pointer events)
     // Prevent default touch actions on canvas
@@ -1302,6 +1337,56 @@ const app = {
         rect.setAttribute('stroke', el.stroke || '#f59e0b');
         rect.setAttribute('stroke-width', el.strokeWidth || 2);
         group.appendChild(rect);
+
+        // Render SVG symbol schematic inside engineering blocks
+        if (el.type === 'engineering-block' && el.symbolPath) {
+          const pad = 8;
+          const labelH = el.text ? 20 : 0;
+          const availW = el.width - pad * 2;
+          const availH = el.height - pad * 2 - labelH;
+          const scale = Math.min(availW / 24, availH / 24);
+          const ox = el.x + (el.width - 24 * scale) / 2;
+          const oy = el.y + pad + (availH - 24 * scale) / 2;
+          const sg = document.createElementNS(SVG_NS, 'g');
+          sg.setAttribute('transform', `translate(${ox},${oy}) scale(${scale})`);
+          const sp = document.createElementNS(SVG_NS, 'path');
+          sp.setAttribute('d', el.symbolPath);
+          sp.setAttribute('fill', el.symbolFill || 'none');
+          sp.setAttribute('stroke', el.stroke || '#f59e0b');
+          sp.setAttribute('stroke-width', Math.max(1, 1.5 / scale));
+          sp.setAttribute('stroke-linecap', 'round');
+          sp.setAttribute('stroke-linejoin', 'round');
+          if (el.symbolDash) sp.setAttribute('stroke-dasharray', el.symbolDash);
+          sg.appendChild(sp);
+          if (el.symbolCircle) {
+            const circ = document.createElementNS(SVG_NS, 'circle');
+            circ.setAttribute('cx', '12'); circ.setAttribute('cy', '12'); circ.setAttribute('r', '10');
+            circ.setAttribute('fill', 'none');
+            circ.setAttribute('stroke', el.stroke || '#f59e0b');
+            circ.setAttribute('stroke-width', Math.max(1, 1.5 / scale));
+            sg.appendChild(circ);
+          }
+          if (el.symbolExtra) {
+            const ep = document.createElementNS(SVG_NS, 'path');
+            ep.setAttribute('d', el.symbolExtra);
+            ep.setAttribute('fill', 'none');
+            ep.setAttribute('stroke', el.stroke || '#f59e0b');
+            ep.setAttribute('stroke-width', Math.max(1, 1.5 / scale));
+            ep.setAttribute('stroke-linecap', 'round');
+            sg.appendChild(ep);
+          }
+          if (el.symbolLabel) {
+            const lt = document.createElementNS(SVG_NS, 'text');
+            lt.setAttribute('x', '12'); lt.setAttribute('y', '14');
+            lt.setAttribute('text-anchor', 'middle');
+            lt.setAttribute('font-size', '6');
+            lt.setAttribute('fill', el.stroke || '#f59e0b');
+            lt.setAttribute('stroke', 'none');
+            lt.textContent = el.symbolLabel;
+            sg.appendChild(lt);
+          }
+          group.appendChild(sg);
+        }
       } else if (el.type === 'ellipse') {
         const ell = document.createElementNS(SVG_NS, 'ellipse');
         ell.setAttribute('cx', el.x + el.width / 2);
@@ -1358,13 +1443,17 @@ const app = {
 
       // Text label
       if (el.text && el.type !== 'freehand') {
+        const isEngSym = el.type === 'engineering-block' && el.symbolPath;
         const fo = document.createElementNS(SVG_NS, 'foreignObject');
         fo.setAttribute('x', el.x + 4);
-        fo.setAttribute('y', el.y + 4);
+        fo.setAttribute('y', isEngSym ? el.y + el.height - 24 : el.y + 4);
         fo.setAttribute('width', el.width - 8);
-        fo.setAttribute('height', el.height - 8);
+        fo.setAttribute('height', isEngSym ? 20 : el.height - 8);
         const div = document.createElement('div');
-        div.style.cssText = `width:100%;height:100%;display:flex;align-items:center;justify-content:${el.textAlign || 'center'};font-size:${el.fontSize || 14}px;color:${el.type === 'sticky' ? '#1a1a1a' : 'var(--fg)'};overflow:hidden;word-break:break-word;line-height:1.3;white-space:pre-wrap;padding:4px;`;
+        const engStyle = isEngSym ? `font-size:11px;color:var(--fg);opacity:0.7;` : '';
+        div.style.cssText = isEngSym
+          ? `width:100%;height:100%;display:flex;align-items:center;justify-content:center;${engStyle}overflow:hidden;word-break:break-word;line-height:1.1;white-space:nowrap;text-overflow:ellipsis;`
+          : `width:100%;height:100%;display:flex;align-items:center;justify-content:${el.textAlign || 'center'};font-size:${el.fontSize || 14}px;color:${el.type === 'sticky' ? '#1a1a1a' : 'var(--fg)'};overflow:hidden;word-break:break-word;line-height:1.3;white-space:pre-wrap;padding:4px;`;
         div.textContent = el.text;
         fo.appendChild(div);
         group.appendChild(fo);
@@ -2274,6 +2363,37 @@ const app = {
     this.renderSymbols();
   },
 
+  initPanelResize() {
+    const handle = document.getElementById('symbol-resize');
+    if (!handle) return;
+    const panel = document.getElementById('symbol-panel');
+    let startX, startW;
+    const onMove = (e) => {
+      const newW = Math.max(180, Math.min(window.innerWidth * 0.5, startW + (e.clientX - startX)));
+      panel.style.width = newW + 'px';
+      // Update grid columns based on width
+      const grid = document.getElementById('symbol-grid');
+      if (grid) grid.style.gridTemplateColumns = `repeat(${newW < 220 ? 2 : newW < 380 ? 3 : 4}, 1fr)`;
+    };
+    const onUp = () => {
+      handle.classList.remove('active');
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+    handle.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      startX = e.clientX;
+      startW = panel.offsetWidth;
+      handle.classList.add('active');
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    });
+  },
+
   setSymbolCategory(cat) {
     this._symbolCategory = cat;
     document.querySelectorAll('.sp-tab').forEach(t => t.classList.toggle('active', t.textContent.toLowerCase() === cat));
@@ -2553,6 +2673,27 @@ const app = {
       rect.setAttribute('stroke', el.stroke || '#f59e0b');
       rect.setAttribute('stroke-width', el.strokeWidth || 2);
       group.appendChild(rect);
+      if (el.type === 'engineering-block' && el.symbolPath) {
+        const pad = 8, labelH = el.text ? 20 : 0;
+        const availW = el.width - pad * 2, availH = el.height - pad * 2 - labelH;
+        const scale = Math.min(availW / 24, availH / 24);
+        const ox = el.x + (el.width - 24 * scale) / 2;
+        const oy = el.y + pad + (availH - 24 * scale) / 2;
+        const sg = document.createElementNS(SVG_NS, 'g');
+        sg.setAttribute('transform', `translate(${ox},${oy}) scale(${scale})`);
+        const sp = document.createElementNS(SVG_NS, 'path');
+        sp.setAttribute('d', el.symbolPath);
+        sp.setAttribute('fill', el.symbolFill || 'none');
+        sp.setAttribute('stroke', el.stroke || '#f59e0b');
+        sp.setAttribute('stroke-width', Math.max(1, 1.5 / scale));
+        sp.setAttribute('stroke-linecap', 'round'); sp.setAttribute('stroke-linejoin', 'round');
+        if (el.symbolDash) sp.setAttribute('stroke-dasharray', el.symbolDash);
+        sg.appendChild(sp);
+        if (el.symbolCircle) { const c = document.createElementNS(SVG_NS, 'circle'); c.setAttribute('cx','12'); c.setAttribute('cy','12'); c.setAttribute('r','10'); c.setAttribute('fill','none'); c.setAttribute('stroke', el.stroke||'#f59e0b'); c.setAttribute('stroke-width', Math.max(1,1.5/scale)); sg.appendChild(c); }
+        if (el.symbolExtra) { const ep = document.createElementNS(SVG_NS, 'path'); ep.setAttribute('d', el.symbolExtra); ep.setAttribute('fill','none'); ep.setAttribute('stroke', el.stroke||'#f59e0b'); ep.setAttribute('stroke-width', Math.max(1,1.5/scale)); ep.setAttribute('stroke-linecap','round'); sg.appendChild(ep); }
+        if (el.symbolLabel) { const lt = document.createElementNS(SVG_NS, 'text'); lt.setAttribute('x','12'); lt.setAttribute('y','14'); lt.setAttribute('text-anchor','middle'); lt.setAttribute('font-size','6'); lt.setAttribute('fill', el.stroke||'#f59e0b'); lt.setAttribute('stroke','none'); lt.textContent = el.symbolLabel; sg.appendChild(lt); }
+        group.appendChild(sg);
+      }
     } else if (el.type === 'ellipse') {
       const ell = document.createElementNS(SVG_NS, 'ellipse');
       ell.setAttribute('cx', el.x + el.width / 2); ell.setAttribute('cy', el.y + el.height / 2);
