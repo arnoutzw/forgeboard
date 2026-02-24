@@ -108,6 +108,30 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent)}
 .color-swatch{width:24px;height:24px;border-radius:4px;cursor:pointer;border:2px solid transparent;transition:border-color .15s}
 .color-swatch:hover,.color-swatch.active{border-color:var(--fg)}
 
+/* Pen options panel */
+#pen-panel{display:none;position:absolute;left:68px;top:0;width:220px;height:100%;background:var(--bg2);border-right:1px solid var(--bg3);z-index:17;box-shadow:var(--shadow);overflow-y:auto;flex-direction:column}
+#pen-panel.show{display:flex}
+.pp-section{padding:10px 14px;border-bottom:1px solid var(--bg3)}
+.pp-section:last-child{border-bottom:none}
+.pp-label{font-size:11px;color:var(--fg3);margin-bottom:6px;display:block;font-weight:500}
+.pp-modes{display:flex;gap:2px}
+.pp-mode{flex:1;padding:5px 0;border-radius:6px;font-size:11px;font-weight:600;text-align:center;color:var(--fg2);background:transparent;border:1px solid var(--bg3);cursor:pointer;transition:all .15s}
+.pp-mode:hover{background:var(--bg3);color:var(--fg)}
+.pp-mode.active{background:var(--accent);color:var(--bg);border-color:var(--accent)}
+.pp-colors{display:flex;gap:4px;flex-wrap:wrap}
+.pp-swatch{width:22px;height:22px;border-radius:4px;cursor:pointer;border:2px solid transparent;transition:border-color .15s}
+.pp-swatch:hover,.pp-swatch.active{border-color:var(--fg)}
+.pp-custom-color{width:22px;height:22px;border-radius:4px;border:1px dashed var(--bg4);cursor:pointer;padding:0;background:transparent}
+.pp-slider-row{display:flex;align-items:center;gap:8px}
+.pp-slider-row input[type="range"]{flex:1;accent-color:var(--accent)}
+.pp-slider-val{font-size:11px;color:var(--fg2);min-width:28px;text-align:right;font-variant-numeric:tabular-nums}
+.pp-preview-dot{display:flex;align-items:center;justify-content:center;height:24px}
+.pp-preview-dot span{border-radius:50%;background:var(--fg)}
+.pp-toggle{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--fg2);cursor:pointer;margin-top:4px}
+.pp-toggle:first-child{margin-top:0}
+.pp-toggle input{accent-color:var(--accent)}
+#eraser-cursor{position:fixed;pointer-events:none;border:2px solid var(--fg2);border-radius:50%;z-index:30;display:none;transform:translate(-50%,-50%)}
+
 /* Properties bar (bottom) */
 #props-bar{height:0;overflow:hidden;background:var(--bg2);border-top:1px solid var(--bg3);transition:height .2s;padding:0 12px;display:flex;align-items:center;gap:12px;flex-shrink:0}
 #props-bar.show{height:40px}
@@ -240,6 +264,48 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent)}
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 3H3v18h18V3zM9 3v18"/></svg>
         <span>Collapse</span>
       </button>
+    </div>
+  </div>
+
+  <!-- Pen options panel -->
+  <div id="pen-panel">
+    <div class="pp-section" id="pp-draw-options">
+      <span class="pp-label">Mode</span>
+      <div class="pp-modes">
+        <button class="pp-mode active" data-mode="pen" onclick="app.setPenMode('pen')">Pen</button>
+        <button class="pp-mode" data-mode="marker" onclick="app.setPenMode('marker')">Marker</button>
+        <button class="pp-mode" data-mode="highlighter" onclick="app.setPenMode('highlighter')">Highlight</button>
+      </div>
+    </div>
+    <div class="pp-section" id="pp-color-section">
+      <span class="pp-label">Color</span>
+      <div class="pp-colors" id="pp-color-grid"></div>
+    </div>
+    <div class="pp-section" id="pp-width-section">
+      <span class="pp-label">Width</span>
+      <div class="pp-preview-dot"><span id="pp-width-dot"></span></div>
+      <div class="pp-slider-row">
+        <input type="range" id="pp-width" min="1" max="20" value="3" oninput="app.setPenWidth(+this.value)">
+        <span class="pp-slider-val" id="pp-width-val">3px</span>
+      </div>
+    </div>
+    <div class="pp-section" id="pp-opacity-section">
+      <span class="pp-label">Opacity</span>
+      <div class="pp-slider-row">
+        <input type="range" id="pp-opacity" min="5" max="100" value="100" oninput="app.setPenOpacity(+this.value/100)">
+        <span class="pp-slider-val" id="pp-opacity-val">100%</span>
+      </div>
+    </div>
+    <div class="pp-section" id="pp-toggles">
+      <label class="pp-toggle"><input type="checkbox" id="pp-pressure" checked onchange="app.togglePressure()"> Pressure</label>
+      <label class="pp-toggle"><input type="checkbox" id="pp-smoothing" checked onchange="app.toggleSmoothing()"> Smoothing</label>
+    </div>
+    <div class="pp-section" id="pp-eraser-section" style="display:none">
+      <span class="pp-label">Eraser Size</span>
+      <div class="pp-slider-row">
+        <input type="range" id="pp-eraser-radius" min="5" max="80" value="20" oninput="app.setEraserRadius(+this.value)">
+        <span class="pp-slider-val" id="pp-eraser-val">20px</span>
+      </div>
     </div>
   </div>
 
@@ -393,6 +459,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent)}
 
 <!-- Toast container -->
 <div class="toast-container" id="toasts"></div>
+<div id="eraser-cursor"></div>
 
 <!-- Hidden file input -->
 <input type="file" id="file-input" accept=".json" style="display:none" onchange="app.handleImport(event)">
@@ -410,6 +477,31 @@ function uid() { return 'el-' + Math.random().toString(36).substr(2, 9) + Date.n
 function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
 function dist(a, b) { return Math.hypot(b.x - a.x, b.y - a.y); }
 function lerp(a, b, t) { return a + (b - a) * t; }
+function smoothPoints(pts, tension) {
+  if (!tension) tension = 0.5;
+  if (pts.length < 3) return pts;
+  const out = [pts[0]];
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p0 = pts[Math.max(0, i - 1)];
+    const p1 = pts[i];
+    const p2 = pts[Math.min(pts.length - 1, i + 1)];
+    const p3 = pts[Math.min(pts.length - 1, i + 2)];
+    const steps = 4;
+    for (let s = 1; s <= steps; s++) {
+      const t = s / steps;
+      const t2 = t * t, t3 = t2 * t;
+      const x = 0.5 * ((2 * p1.x) + (-p0.x + p2.x) * t * tension +
+        (2 * p0.x - 5 * p1.x + 4 * p2.x - p3.x) * t2 * tension +
+        (-p0.x + 3 * p1.x - 3 * p2.x + p3.x) * t3 * tension);
+      const y = 0.5 * ((2 * p1.y) + (-p0.y + p2.y) * t * tension +
+        (2 * p0.y - 5 * p1.y + 4 * p2.y - p3.y) * t2 * tension +
+        (-p0.y + 3 * p1.y - 3 * p2.y + p3.y) * t3 * tension);
+      const pr = lerp(p1.pressure || 0.5, p2.pressure || 0.5, t);
+      out.push({ x, y, pressure: pr });
+    }
+  }
+  return out;
+}
 
 // ─── Tool definitions ────────────────────────────────────────────
 const TOOLS = [
@@ -459,6 +551,10 @@ const app = {
   penPressure: true,
   penWidth: 3,
   penColor: '#f59e0b',
+  penOpacity: 1,
+  penMode: 'pen',
+  penSmoothing: true,
+  eraserRadius: 20,
   isDemo: false,
   sidebarExpanded: false,
   theme: 'dark',
@@ -475,6 +571,7 @@ const app = {
     this.loadData();
     this.buildTools();
     this.buildTabletToolbar();
+    this.buildPenPanel();
     this.bindEvents();
     this.detectEink();
     this.initSymbolPanel();
@@ -617,9 +714,140 @@ const app = {
       b.classList.toggle('active', b.dataset.tool === id);
     });
     const wrap = document.getElementById('canvas-wrap');
-    wrap.style.cursor = id === 'pan' ? 'grab' : id === 'pen' || id === 'lasso' ? 'crosshair' : id === 'select' ? 'default' : 'crosshair';
+    wrap.style.cursor = id === 'eraser' ? 'none' : id === 'pan' ? 'grab' : id === 'pen' || id === 'lasso' ? 'crosshair' : id === 'select' ? 'default' : 'crosshair';
+    document.getElementById('draw-canvas').style.cursor = id === 'eraser' ? 'none' : '';
+    if (id !== 'eraser') document.getElementById('eraser-cursor').style.display = 'none';
     // Show/hide draw canvas
     document.getElementById('draw-canvas').style.pointerEvents = (id === 'pen' || id === 'eraser') ? 'auto' : 'none';
+    // Show/hide pen panel
+    if (id === 'pen' || id === 'eraser') this.showPenPanel(id);
+    else this.hidePenPanel();
+  },
+
+  // ─── Pen options panel ──────────────────────────────────
+  buildPenPanel() {
+    const grid = document.getElementById('pp-color-grid');
+    STROKE_COLORS.forEach(c => {
+      const sw = document.createElement('div');
+      sw.className = 'pp-swatch' + (c === this.penColor ? ' active' : '');
+      sw.style.background = c;
+      sw.onclick = () => this.setPenColor(c);
+      grid.appendChild(sw);
+    });
+    // Custom color picker
+    const custom = document.createElement('input');
+    custom.type = 'color';
+    custom.className = 'pp-custom-color';
+    custom.value = this.penColor;
+    custom.title = 'Custom color';
+    custom.oninput = () => this.setPenColor(custom.value);
+    grid.appendChild(custom);
+    this.updateWidthDot();
+  },
+
+  showPenPanel(toolId) {
+    const panel = document.getElementById('pen-panel');
+    const drawOpts = document.getElementById('pp-draw-options');
+    const colorSec = document.getElementById('pp-color-section');
+    const widthSec = document.getElementById('pp-width-section');
+    const opacitySec = document.getElementById('pp-opacity-section');
+    const toggleSec = document.getElementById('pp-toggles');
+    const eraserSec = document.getElementById('pp-eraser-section');
+    const isEraser = toolId === 'eraser';
+    drawOpts.style.display = isEraser ? 'none' : '';
+    colorSec.style.display = isEraser ? 'none' : '';
+    widthSec.style.display = isEraser ? 'none' : '';
+    opacitySec.style.display = isEraser ? 'none' : '';
+    toggleSec.style.display = isEraser ? 'none' : '';
+    eraserSec.style.display = isEraser ? '' : 'none';
+    // Sync controls to current state
+    document.getElementById('pp-width').value = this.penWidth;
+    document.getElementById('pp-width-val').textContent = this.penWidth + 'px';
+    document.getElementById('pp-opacity').value = Math.round(this.penOpacity * 100);
+    document.getElementById('pp-opacity-val').textContent = Math.round(this.penOpacity * 100) + '%';
+    document.getElementById('pp-pressure').checked = this.penPressure;
+    document.getElementById('pp-smoothing').checked = this.penSmoothing;
+    document.getElementById('pp-eraser-radius').value = this.eraserRadius;
+    document.getElementById('pp-eraser-val').textContent = this.eraserRadius + 'px';
+    document.querySelectorAll('.pp-mode').forEach(b => b.classList.toggle('active', b.dataset.mode === this.penMode));
+    document.querySelectorAll('.pp-swatch').forEach(s => s.classList.toggle('active', s.style.background === this.penColor || this.rgbMatch(s.style.background, this.penColor)));
+    this.updateWidthDot();
+    panel.classList.add('show');
+  },
+
+  hidePenPanel() {
+    document.getElementById('pen-panel').classList.remove('show');
+  },
+
+  setPenColor(c) {
+    this.penColor = c;
+    document.querySelectorAll('.pp-swatch').forEach(s => s.classList.toggle('active', this.rgbMatch(s.style.background, c)));
+    const custom = document.querySelector('.pp-custom-color');
+    if (custom) custom.value = c;
+  },
+
+  setPenWidth(w) {
+    this.penWidth = w;
+    document.getElementById('pp-width-val').textContent = w + 'px';
+    this.updateWidthDot();
+  },
+
+  setPenOpacity(o) {
+    this.penOpacity = Math.max(0.05, Math.min(1, o));
+    document.getElementById('pp-opacity').value = Math.round(this.penOpacity * 100);
+    document.getElementById('pp-opacity-val').textContent = Math.round(this.penOpacity * 100) + '%';
+  },
+
+  setPenMode(mode) {
+    this.penMode = mode;
+    document.querySelectorAll('.pp-mode').forEach(b => b.classList.toggle('active', b.dataset.mode === mode));
+    // Apply mode presets
+    const presets = { pen: { w: 3, o: 1 }, marker: { w: 8, o: 0.7 }, highlighter: { w: 20, o: 0.3 } };
+    const p = presets[mode];
+    this.setPenWidth(p.w);
+    this.setPenOpacity(p.o);
+    document.getElementById('pp-width').value = p.w;
+    document.getElementById('pp-opacity').value = Math.round(p.o * 100);
+    this.toast(`Mode: ${mode.charAt(0).toUpperCase() + mode.slice(1)}`);
+  },
+
+  togglePressure() {
+    this.penPressure = !this.penPressure;
+    document.getElementById('pp-pressure').checked = this.penPressure;
+    this.toast(`Pressure: ${this.penPressure ? 'On' : 'Off'}`);
+  },
+
+  toggleSmoothing() {
+    this.penSmoothing = !this.penSmoothing;
+    document.getElementById('pp-smoothing').checked = this.penSmoothing;
+    this.toast(`Smoothing: ${this.penSmoothing ? 'On' : 'Off'}`);
+  },
+
+  setEraserRadius(r) {
+    this.eraserRadius = r;
+    document.getElementById('pp-eraser-val').textContent = r + 'px';
+  },
+
+  updateWidthDot() {
+    const dot = document.getElementById('pp-width-dot');
+    if (dot) {
+      const sz = Math.max(4, this.penWidth * 1.5);
+      dot.style.width = sz + 'px';
+      dot.style.height = sz + 'px';
+      dot.style.background = this.penColor;
+      dot.style.opacity = this.penOpacity;
+    }
+  },
+
+  rgbMatch(rgb, hex) {
+    // Compare browser-computed rgb() string with hex color
+    if (!rgb || !hex) return false;
+    const tmp = document.createElement('div');
+    tmp.style.color = hex;
+    document.body.appendChild(tmp);
+    const computed = getComputedStyle(tmp).color;
+    document.body.removeChild(tmp);
+    return rgb === computed;
   },
 
   toggleSidebar() {
@@ -847,7 +1075,8 @@ const app = {
     }
 
     if (this.tool === 'eraser') {
-      const hit = this.hitTest(p.x, p.y);
+      const r = this.eraserRadius / this.viewport.zoom;
+      const hit = this.hitTestRadius(p.x, p.y, r);
       if (hit) {
         this.pushUndo();
         this.elements = this.elements.filter(el => el.id !== hit.id);
@@ -889,6 +1118,18 @@ const app = {
 
   onPointerMove(e) {
     this._pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    // Eraser cursor
+    const ec = document.getElementById('eraser-cursor');
+    if (this.tool === 'eraser') {
+      const sz = this.eraserRadius * 2;
+      ec.style.display = 'block';
+      ec.style.width = sz + 'px';
+      ec.style.height = sz + 'px';
+      ec.style.left = e.clientX + 'px';
+      ec.style.top = e.clientY + 'px';
+    } else {
+      ec.style.display = 'none';
+    }
 
     // Touch pinch zoom
     if (e.pointerType === 'touch' && this._pointers.size === 2) {
@@ -1123,6 +1364,8 @@ const app = {
       points: [{ x: p.x, y: p.y, pressure: e.pressure || 0.5 }],
       color: this.penColor,
       baseWidth: this.penWidth,
+      opacity: this.penOpacity,
+      mode: this.penMode,
     };
   },
 
@@ -1147,13 +1390,16 @@ const app = {
     if (!this._currentStroke) return;
     if (this._currentStroke.points.length > 1) {
       this.pushUndo();
+      let pts = this._currentStroke.points;
+      if (this.penSmoothing && pts.length > 4) pts = smoothPoints(pts);
       const el = {
         id: uid(),
         type: 'freehand',
-        points: this._currentStroke.points,
+        points: pts,
         stroke: this._currentStroke.color,
         strokeWidth: this._currentStroke.baseWidth,
-        opacity: 1,
+        opacity: this._currentStroke.opacity,
+        mode: this._currentStroke.mode || 'pen',
         locked: false,
       };
       // Compute bounding box
@@ -1177,21 +1423,27 @@ const app = {
     // Draw current stroke
     const pts = this._currentStroke.points;
     if (pts.length < 2) return;
+    const mode = this._currentStroke.mode || 'pen';
+    const isHL = mode === 'highlighter';
     ctx.strokeStyle = this._currentStroke.color;
-    ctx.lineCap = 'round';
+    ctx.lineCap = (mode === 'pen') ? 'round' : 'square';
     ctx.lineJoin = 'round';
-    ctx.globalAlpha = 1;
+    ctx.globalAlpha = this._currentStroke.opacity;
+    ctx.globalCompositeOperation = isHL ? 'destination-over' : 'source-over';
     for (let i = 1; i < pts.length; i++) {
       const p0 = pts[i-1], p1 = pts[i];
       const s0 = this.canvasToScreenLocal(p0.x, p0.y);
       const s1 = this.canvasToScreenLocal(p1.x, p1.y);
-      const w = this.penPressure ? this._currentStroke.baseWidth * (p1.pressure * 1.5 + 0.3) : this._currentStroke.baseWidth;
+      const usePressure = this.penPressure && !isHL;
+      const w = usePressure ? this._currentStroke.baseWidth * (p1.pressure * 1.5 + 0.3) : this._currentStroke.baseWidth;
       ctx.lineWidth = w * this.viewport.zoom;
       ctx.beginPath();
       ctx.moveTo(s0.x, s0.y);
       ctx.lineTo(s1.x, s1.y);
       ctx.stroke();
     }
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.globalAlpha = 1;
   },
 
   renderFreehandStrokes() {
@@ -1203,19 +1455,26 @@ const app = {
   },
 
   drawFreehandElements(ctx) {
-    this.elements.filter(el => el.type === 'freehand').forEach(el => {
+    // Draw highlighter strokes first (behind everything)
+    const freehand = this.elements.filter(el => el.type === 'freehand');
+    const highlighters = freehand.filter(el => el.mode === 'highlighter');
+    const others = freehand.filter(el => el.mode !== 'highlighter');
+    [...highlighters, ...others].forEach(el => {
       const pts = el.points;
       if (!pts || pts.length < 2) return;
+      const mode = el.mode || 'pen';
+      const isHL = mode === 'highlighter';
       ctx.strokeStyle = el.stroke;
-      ctx.lineCap = 'round';
+      ctx.lineCap = (mode === 'pen') ? 'round' : 'square';
       ctx.lineJoin = 'round';
       ctx.globalAlpha = el.opacity || 1;
+      const usePressure = this.penPressure && !isHL;
       for (let i = 1; i < pts.length; i++) {
         const p0 = pts[i-1], p1 = pts[i];
         const s0 = this.canvasToScreenLocal(p0.x, p0.y);
         const s1 = this.canvasToScreenLocal(p1.x, p1.y);
         const pressure = p1.pressure || 0.5;
-        const w = this.penPressure ? el.strokeWidth * (pressure * 1.5 + 0.3) : el.strokeWidth;
+        const w = usePressure ? el.strokeWidth * (pressure * 1.5 + 0.3) : el.strokeWidth;
         ctx.lineWidth = w * this.viewport.zoom;
         ctx.beginPath();
         ctx.moveTo(s0.x, s0.y);
@@ -1272,6 +1531,24 @@ const app = {
       }
       const b = this.getElementBounds(el);
       if (x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h) return el;
+    }
+    return null;
+  },
+
+  hitTestRadius(x, y, radius) {
+    for (let i = this.elements.length - 1; i >= 0; i--) {
+      const el = this.elements[i];
+      if (el.type === 'freehand') {
+        // Check if any point is within radius
+        if (el.points && el.points.some(pt => Math.hypot(pt.x - x, pt.y - y) < radius)) return el;
+        continue;
+      }
+      if (['line', 'arrow', 'connector'].includes(el.type)) {
+        if (this.distToLine(x, y, el.x, el.y, el.x2, el.y2) < radius) return el;
+        continue;
+      }
+      const b = this.getElementBounds(el);
+      if (x >= b.x - radius && x <= b.x + b.w + radius && y >= b.y - radius && y <= b.y + b.h + radius) return el;
     }
     return null;
   },
@@ -1842,8 +2119,10 @@ const app = {
       this.setTool(toolMap[e.key.toLowerCase()]);
     }
 
-    if (e.key === '[') { this.penWidth = Math.max(1, this.penWidth - 1); this.toast(`Pen: ${this.penWidth}px`); }
-    if (e.key === ']') { this.penWidth = Math.min(20, this.penWidth + 1); this.toast(`Pen: ${this.penWidth}px`); }
+    if (e.key === '[' && !e.shiftKey) { this.setPenWidth(Math.max(1, this.penWidth - 1)); document.getElementById('pp-width').value = this.penWidth; this.toast(`Width: ${this.penWidth}px`); }
+    if (e.key === ']' && !e.shiftKey) { this.setPenWidth(Math.min(20, this.penWidth + 1)); document.getElementById('pp-width').value = this.penWidth; this.toast(`Width: ${this.penWidth}px`); }
+    if (e.key === '{') { this.setPenOpacity(Math.max(0.05, this.penOpacity - 0.1)); this.toast(`Opacity: ${Math.round(this.penOpacity * 100)}%`); }
+    if (e.key === '}') { this.setPenOpacity(Math.min(1, this.penOpacity + 0.1)); this.toast(`Opacity: ${Math.round(this.penOpacity * 100)}%`); }
   },
 
   // ─── Context menu ────────────────────────────────────────
