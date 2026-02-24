@@ -1789,15 +1789,16 @@ const app = {
       group.style.opacity = el.opacity || 1;
 
       if (el.type === 'rectangle' || el.type === 'engineering-block') {
+        const isSymbol = el.type === 'engineering-block';
         const rect = document.createElementNS(SVG_NS, 'rect');
         rect.setAttribute('x', el.x);
         rect.setAttribute('y', el.y);
         rect.setAttribute('width', el.width);
         rect.setAttribute('height', el.height);
-        rect.setAttribute('rx', el.type === 'engineering-block' ? 2 : 6);
-        rect.setAttribute('fill', el.fill || this._themeBg2());
-        rect.setAttribute('stroke', el.stroke || this._themeAccent());
-        rect.setAttribute('stroke-width', el.strokeWidth || 2);
+        rect.setAttribute('rx', isSymbol ? 2 : 6);
+        rect.setAttribute('fill', isSymbol ? 'var(--bg)' : (el.fill || this._themeBg2()));
+        rect.setAttribute('stroke', isSymbol ? 'none' : (el.stroke || this._themeAccent()));
+        rect.setAttribute('stroke-width', isSymbol ? 0 : (el.strokeWidth || 2));
         group.appendChild(rect);
 
         // Render SVG symbol schematic inside engineering blocks
@@ -3131,15 +3132,16 @@ const app = {
     group.setAttribute('data-id', el.id);
     group.style.opacity = el.opacity || 1;
     if (el.type === 'rectangle' || el.type === 'engineering-block') {
+      const isSymbol = el.type === 'engineering-block';
       const rect = document.createElementNS(SVG_NS, 'rect');
       rect.setAttribute('x', el.x); rect.setAttribute('y', el.y);
       rect.setAttribute('width', el.width); rect.setAttribute('height', el.height);
-      rect.setAttribute('rx', el.type === 'engineering-block' ? 2 : 6);
-      rect.setAttribute('fill', el.fill || this._themeBg2());
-      rect.setAttribute('stroke', el.stroke || this._themeAccent());
-      rect.setAttribute('stroke-width', el.strokeWidth || 2);
+      rect.setAttribute('rx', isSymbol ? 2 : 6);
+      rect.setAttribute('fill', isSymbol ? 'var(--bg)' : (el.fill || this._themeBg2()));
+      rect.setAttribute('stroke', isSymbol ? 'none' : (el.stroke || this._themeAccent()));
+      rect.setAttribute('stroke-width', isSymbol ? 0 : (el.strokeWidth || 2));
       group.appendChild(rect);
-      if (el.type === 'engineering-block' && el.symbolPath) {
+      if (isSymbol && el.symbolPath) {
         const pad = 8, labelH = el.text ? 20 : 0;
         const availW = el.width - pad * 2, availH = el.height - pad * 2 - labelH;
         const scale = Math.min(availW / 24, availH / 24);
