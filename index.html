@@ -176,6 +176,51 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent)}
 /* Lasso selection path */
 .lasso-path{fill:rgba(245,158,11,.05);stroke:var(--accent);stroke-width:1.5;stroke-dasharray:5 3;pointer-events:none}
 </style>
+<script>
+// BSI Theme Bridge v1.1 — iframe: parent-only control / standalone: local toggle
+(function() {
+  var APP_THEME_KEY = 'fb_theme';
+  var isEmbedded = (window.parent !== window);
+  function applyBsiTheme(theme) {
+    if (theme !== 'dark' && theme !== 'light') theme = 'dark';
+    var html = document.documentElement;
+    html.setAttribute('data-theme', theme);
+    html.style.colorScheme = theme;
+    var meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.content = (theme === 'light') ? '#ffffff' : '#09090b';
+    document.dispatchEvent(new CustomEvent('bsi-theme-applied', { detail: { theme: theme } }));
+  }
+  function mapTheme(raw) {
+    return (raw === 'asml' || raw === 'light') ? 'light' : 'dark';
+  }
+  if (isEmbedded) {
+    var s = document.createElement('style');
+    s.textContent = '[data-theme-toggle]{display:none!important}';
+    (document.head || document.documentElement).appendChild(s);
+    window.addEventListener('message', function(e) {
+      if (e.data && e.data.type === 'theme-change') applyBsiTheme(mapTheme(e.data.theme));
+    });
+    applyBsiTheme('dark');
+    try { window.parent.postMessage({ type: 'theme-request' }, '*'); } catch(e) {}
+  } else {
+    var saved = localStorage.getItem(APP_THEME_KEY) || 'dark';
+    if (saved === 'asml') { saved = 'light'; localStorage.setItem(APP_THEME_KEY, saved); }
+    applyBsiTheme(saved);
+    window.bsiToggleTheme = function() {
+      var next = (document.documentElement.getAttribute('data-theme') || 'dark') === 'dark' ? 'light' : 'dark';
+      applyBsiTheme(next);
+      localStorage.setItem(APP_THEME_KEY, next);
+    };
+    window.bsiSetTheme = function(theme) {
+      var mapped = mapTheme(theme);
+      applyBsiTheme(mapped);
+      localStorage.setItem(APP_THEME_KEY, mapped);
+    };
+  }
+  window._bsiIsEmbedded = isEmbedded;
+  window._bsiApplyTheme = applyBsiTheme;
+})();
+</script>
 </head>
 <body>
 <div id="app">
@@ -232,7 +277,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent)}
       </div>
       <div class="h-sep"></div>
       <button class="h-btn" onclick="app.toggleLayers()" title="Layers" id="layers-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg></button>
-      <button class="h-btn" onclick="app.toggleTheme()" title="Toggle theme" id="theme-btn">
+      <button class="h-btn" data-theme-toggle onclick="app.toggleTheme()" title="Toggle theme" id="theme-btn">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3a7 7 0 0 0 9.79 9.79z"/></svg>
       </button>
       <div class="user-avatar" id="user-avatar">A</div>
@@ -424,6 +469,9 @@ const app = {
     this.isDemo = new URLSearchParams(location.search).has('demo');
     this.detectTheme();
     this.setupSSO();
+    document.addEventListener('bsi-theme-applied', (e) => {
+      if (e.detail && e.detail.theme) { this.theme = e.detail.theme; this.render(); }
+    });
     this.loadData();
     this.buildTools();
     this.buildTabletToolbar();
@@ -450,10 +498,10 @@ const app = {
     const ua = navigator.userAgent || '';
     if (ua.includes('BOOX') || window.matchMedia('(update: slow)').matches) {
       this.theme = 'eink';
+      document.documentElement.setAttribute('data-theme', 'eink');
     } else {
-      this.theme = localStorage.getItem('fb_theme') || 'dark';
+      this.theme = document.documentElement.getAttribute('data-theme') || 'dark';
     }
-    document.documentElement.setAttribute('data-theme', this.theme);
   },
 
   setupSSO() {
@@ -464,9 +512,7 @@ const app = {
         if (av && this.ssoUser) av.textContent = (this.ssoUser.name || 'U')[0].toUpperCase();
       }
     });
-    if (window.parent !== window) {
-      window.parent.postMessage({ type: 'app-ready', app: 'forgeboard' }, '*');
-    }
+    // Theme sync handled by BSI Theme Bridge v1.1 in <head>
   },
 
   // ─── Data persistence ────────────────────────────────────
@@ -2147,10 +2193,12 @@ const app = {
 
   // ─── Theme ───────────────────────────────────────────────
   toggleTheme() {
+    if (window._bsiIsEmbedded) return;
     const themes = ['dark', 'light', 'eink'];
     const idx = themes.indexOf(this.theme);
     this.theme = themes[(idx + 1) % themes.length];
     document.documentElement.setAttribute('data-theme', this.theme);
+    document.documentElement.style.colorScheme = (this.theme === 'light' || this.theme === 'eink') ? 'light' : 'dark';
     localStorage.setItem('fb_theme', this.theme);
     this.toast('Theme: ' + this.theme);
     this.render();
