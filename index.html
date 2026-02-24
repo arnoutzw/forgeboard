@@ -9,6 +9,7 @@
 <link rel="manifest" href="data:application/json;base64,eyJuYW1lIjoiRm9yZ2VCb2FyZCIsInNob3J0X25hbWUiOiJGb3JnZUJvYXJkIiwic3RhcnRfdXJsIjoiLi8iLCJkaXNwbGF5Ijoic3RhbmRhbG9uZSIsImJhY2tncm91bmRfY29sb3IiOiIjMDkwOTBiIiwidGhlbWVfY29sb3IiOiIjZjU5ZTBiIn0=">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/plotly.js-basic-dist-min@2.35.0/plotly-basic.min.js"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{--bg:#09090b;--bg2:#18181b;--bg3:#27272a;--bg4:#3f3f46;--fg:#fafafa;--fg2:#a1a1aa;--fg3:#71717a;--accent:#f59e0b;--accent2:#d97706;--blue:#3b82f6;--green:#22c55e;--red:#ef4444;--purple:#8b5cf6;--pink:#ec4899;--cyan:#06b6d4;--font:'JetBrains Mono','SF Mono','Fira Code','Cascadia Code',monospace;--radius:6px;--shadow:0 4px 24px rgba(0,0,0,.4)}
@@ -60,8 +61,8 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent)}
 /* Canvas */
 #svg-canvas{position:absolute;top:0;left:0;width:100%;height:100%;touch-action:none}
 #draw-canvas{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;touch-action:none}
-.grid-pattern{opacity:.15}
-[data-theme="eink"] .grid-pattern{opacity:0}
+.grid-pattern{opacity:.4}
+[data-theme="eink"] .grid-pattern{opacity:.25}
 
 /* Selection */
 .selection-box{fill:rgba(245,158,11,.08);stroke:var(--accent);stroke-width:1;stroke-dasharray:4 4}
@@ -94,6 +95,43 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent)}
 .modal input,.modal select,.modal textarea{width:100%}
 .modal textarea{resize:vertical;min-height:60px}
 .modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:20px}
+/* Chart modal */
+.chart-modal{max-width:960px;min-width:700px}
+.chart-layout{display:flex;gap:16px}
+.chart-editor-pane{flex:3;display:flex;flex-direction:column;min-width:0}
+.chart-preview-pane{flex:2;display:flex;flex-direction:column;min-width:0}
+.chart-tabs{display:flex;gap:4px;margin-bottom:8px}
+.chart-tab{padding:4px 12px;border-radius:var(--radius);font-size:11px;font-weight:600;background:transparent;color:var(--fg2);border:1px solid var(--bg3);cursor:pointer}
+.chart-tab.active{background:var(--accent);color:var(--bg);border-color:var(--accent)}
+.chart-table-wrap{overflow:auto;max-height:320px;border:1px solid var(--bg3);border-radius:var(--radius)}
+.chart-table{border-collapse:collapse;width:100%;font-size:12px}
+.chart-table th,.chart-table td{border:1px solid var(--bg3);padding:3px 6px;min-width:70px;color:var(--fg);background:var(--bg)}
+.chart-table th{background:var(--bg2);font-weight:600;font-size:11px;color:var(--fg2);position:sticky;top:0;z-index:1}
+.chart-table td[contenteditable]{outline:none;cursor:text}
+.chart-table td[contenteditable]:focus{background:var(--bg2);box-shadow:inset 0 0 0 1px var(--accent)}
+.chart-table-actions{display:flex;gap:4px;margin-top:6px;flex-wrap:wrap}
+.chart-table-actions button{padding:3px 10px;border-radius:var(--radius);font-size:11px;font-weight:600;background:var(--bg3);color:var(--fg2);border:none;cursor:pointer}
+.chart-table-actions button:hover{background:var(--bg4);color:var(--fg)}
+.chart-csv-tab textarea{font-family:var(--font);font-size:11px;background:var(--bg);color:var(--fg);border:1px solid var(--bg3);border-radius:var(--radius);padding:8px;resize:vertical;min-height:200px}
+.chart-csv-actions{display:flex;gap:4px;margin-top:6px}
+.chart-csv-actions button{padding:3px 10px;border-radius:var(--radius);font-size:11px;font-weight:600;background:var(--bg3);color:var(--fg2);border:none;cursor:pointer}
+.chart-csv-actions button:hover{background:var(--bg4);color:var(--fg)}
+/* Table modal */
+.table-modal{max-width:960px;min-width:700px}
+.table-layout{display:flex;gap:16px}
+.table-editor-pane{flex:3;display:flex;flex-direction:column;min-width:0}
+.table-preview-pane{flex:2;display:flex;flex-direction:column;min-width:0}
+.table-tabs{display:flex;gap:4px;margin-bottom:8px}
+.table-tab{padding:4px 12px;border-radius:var(--radius);font-size:11px;font-weight:600;background:transparent;color:var(--fg2);border:1px solid var(--bg3);cursor:pointer}
+.table-tab.active{background:var(--accent);color:var(--bg);border-color:var(--accent)}
+.table-style-row{display:flex;gap:8px;margin-bottom:8px;align-items:center;flex-wrap:wrap}
+.table-style-row label{font-size:12px;color:var(--fg2);margin:0;white-space:nowrap}
+.table-style-row select{flex:1}
+.table-preview-wrap{flex:1;overflow:auto;border:1px solid var(--bg3);border-radius:var(--radius);background:var(--bg);padding:12px}
+.table-preview-wrap table{border-collapse:collapse;width:100%;font-size:11px;color:var(--fg)}
+.table-preview-wrap th{background:var(--accent);color:var(--bg);padding:6px 10px;text-align:left;font-weight:600;font-size:11px}
+.table-preview-wrap td{padding:5px 10px;border-bottom:1px solid var(--bg3)}
+.table-preview-wrap tr:nth-child(even) td{background:var(--bg2)}
 .btn{padding:8px 16px;border-radius:var(--radius);font-size:12px;font-weight:600;transition:all .15s}
 .btn-primary{background:var(--accent);color:var(--bg)}
 .btn-primary:hover{background:var(--accent2)}
@@ -203,11 +241,11 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent)}
 .sp-tab{padding:4px 10px;border-radius:4px;font-size:11px;color:var(--fg2);white-space:nowrap;cursor:pointer}
 .sp-tab:hover{background:var(--bg3)}
 .sp-tab.active{background:var(--accent);color:var(--bg)}
-.sp-grid{flex:1;overflow-y:auto;padding:8px;display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
-.sp-item{display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px 4px;border-radius:var(--radius);cursor:grab;border:1px solid transparent;transition:all .15s}
+.sp-grid{flex:1;overflow-y:auto;padding:6px;display:grid;grid-template-columns:repeat(4,1fr);gap:4px}
+.sp-item{display:flex;flex-direction:column;align-items:center;gap:2px;padding:4px 4px;border-radius:var(--radius);cursor:grab;border:1px solid transparent;transition:all .15s}
 .sp-item:hover{background:var(--bg3);border-color:var(--bg4)}
-.sp-item svg{width:40px;height:40px}
-.sp-item span{font-size:9px;color:var(--fg3);text-align:center;line-height:1.2;max-height:22px;overflow:hidden}
+.sp-item svg{width:32px;height:32px}
+.sp-item span{font-size:8px;color:var(--fg3);text-align:center;line-height:1.2;max-height:18px;overflow:hidden}
 
 /* Lasso selection path */
 .lasso-path{fill:rgba(245,158,11,.05);stroke:var(--accent);stroke-width:1.5;stroke-dasharray:5 3;pointer-events:none}
@@ -403,7 +441,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent)}
       <svg id="svg-canvas" xmlns="http://www.w3.org/2000/svg">
         <defs>
           <pattern id="grid-dots" width="20" height="20" patternUnits="userSpaceOnUse">
-            <circle cx="10" cy="10" r="0.8" fill="var(--fg3)" class="grid-pattern"/>
+            <circle cx="10" cy="10" r="1" fill="var(--fg3)" class="grid-pattern"/>
           </pattern>
           <marker id="arrow-end" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
             <path d="M0 0L10 4L0 8z" fill="var(--fg2)"/>
@@ -525,6 +563,108 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent)}
   </div>
 </div>
 
+<div class="modal-overlay" id="modal-chart">
+  <div class="modal chart-modal">
+    <h3>Chart Editor</h3>
+    <div class="chart-layout">
+      <div class="chart-editor-pane">
+        <div class="chart-tabs">
+          <button class="chart-tab active" data-tab="data" onclick="app.chartSwitchTab('data')">Data</button>
+          <button class="chart-tab" data-tab="csv" onclick="app.chartSwitchTab('csv')">CSV</button>
+        </div>
+        <div class="chart-data-tab" id="chart-data-tab">
+          <div class="chart-table-wrap">
+            <table class="chart-table" id="chart-table"></table>
+          </div>
+          <div class="chart-table-actions">
+            <button onclick="app.chartAddRow()">+ Row</button>
+            <button onclick="app.chartRemoveRow()">− Row</button>
+            <button onclick="app.chartAddCol()">+ Col</button>
+            <button onclick="app.chartRemoveCol()">− Col</button>
+          </div>
+        </div>
+        <div class="chart-csv-tab" id="chart-csv-tab" style="display:none">
+          <textarea id="chart-csv" rows="12" placeholder="Paste CSV here..."></textarea>
+          <div class="chart-csv-actions">
+            <button onclick="app.chartImportCSV()">Import to Table</button>
+            <button onclick="app.chartExportCSV()">Export from Table</button>
+          </div>
+        </div>
+      </div>
+      <div class="chart-preview-pane">
+        <div style="display:flex;gap:8px;margin-bottom:8px;align-items:center">
+          <label style="font-size:12px;color:var(--fg2);margin:0">Type</label>
+          <select id="chart-type" onchange="app.chartUpdatePreview()" style="flex:1">
+            <option value="bar">Bar</option>
+            <option value="hbar">Horizontal Bar</option>
+            <option value="line">Line</option>
+            <option value="area">Area</option>
+            <option value="scatter">Scatter</option>
+            <option value="bubble">Bubble</option>
+            <option value="pie">Pie</option>
+            <option value="donut">Donut</option>
+            <option value="histogram">Histogram</option>
+            <option value="waterfall">Waterfall</option>
+          </select>
+        </div>
+        <div id="chart-preview" style="width:100%;height:300px;background:var(--bg);border-radius:var(--radius);border:1px solid var(--bg3)"></div>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="app.closeChartModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="app.saveChart()">Insert Chart</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-table">
+  <div class="modal table-modal">
+    <h3>Table Editor</h3>
+    <div class="table-layout">
+      <div class="table-editor-pane">
+        <div class="table-tabs">
+          <button class="table-tab active" data-tab="data" onclick="app.tableSwitchTab('data')">Data</button>
+          <button class="table-tab" data-tab="csv" onclick="app.tableSwitchTab('csv')">CSV</button>
+        </div>
+        <div class="table-data-tab" id="table-data-tab">
+          <div class="chart-table-wrap">
+            <table class="chart-table" id="tbl-table"></table>
+          </div>
+          <div class="chart-table-actions">
+            <button onclick="app.tableAddRow()">+ Row</button>
+            <button onclick="app.tableRemoveRow()">− Row</button>
+            <button onclick="app.tableAddCol()">+ Col</button>
+            <button onclick="app.tableRemoveCol()">− Col</button>
+          </div>
+        </div>
+        <div class="table-csv-tab" id="table-csv-tab" style="display:none">
+          <textarea id="tbl-csv" class="chart-csv-tab textarea" style="font-family:var(--font);font-size:11px;background:var(--bg);color:var(--fg);border:1px solid var(--bg3);border-radius:var(--radius);padding:8px;resize:vertical;min-height:200px;width:100%" rows="12" placeholder="Paste CSV here..."></textarea>
+          <div class="chart-csv-actions">
+            <button onclick="app.tableImportCSV()">Import to Table</button>
+            <button onclick="app.tableExportCSV()">Export from Table</button>
+          </div>
+        </div>
+      </div>
+      <div class="table-preview-pane">
+        <div class="table-style-row">
+          <label>Style</label>
+          <select id="tbl-style" onchange="app.tableUpdatePreview()">
+            <option value="striped">Striped</option>
+            <option value="bordered">Bordered</option>
+            <option value="minimal">Minimal</option>
+            <option value="dark-header">Dark Header</option>
+          </select>
+        </div>
+        <div class="table-preview-wrap" id="tbl-preview"></div>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="app.closeTableModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="app.saveTable()">Insert Table</button>
+    </div>
+  </div>
+</div>
+
 <!-- Toast container -->
 <div class="toast-container" id="toasts"></div>
 <div id="eraser-cursor"></div>
@@ -589,6 +729,8 @@ const TOOLS = [
   { id: 'sticky', label: 'Sticky', key: 'S', icon: '<path d="M16 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8z"/><path d="M15 3v6h6"/>' },
   { id: 'image', label: 'Image', key: 'I', icon: '<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/>' },
   { id: 'math', label: 'Math', key: 'M', icon: '<path d="M4 20h16"/><path d="M8 4l-4 8h8"/><path d="M14 4h6M17 4v8M14 8h6"/>' },
+  { id: 'chart', label: 'Chart', key: 'J', icon: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M7 17v-4"/><path d="M11 17v-8"/><path d="M15 17v-6"/>' },
+  { id: 'table', label: 'Table', key: 'B', icon: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M3 15h18"/><path d="M9 3v18"/>' },
   { sep: true },
   { id: 'eraser', label: 'Eraser', key: 'E', icon: '<path d="M7 21h10"/><path d="M5.5 13.5L12 7l5 5-6.5 6.5a2.12 2.12 0 0 1-3 0L5.5 16.5a2.12 2.12 0 0 1 0-3z"/>' },
   { sep: true },
@@ -629,6 +771,12 @@ const app = {
   shapeStroke: null,
   shapeStrokeWidth: 2,
   shapeStrokeDash: '',
+  _chartEditing: null,
+  _chartType: 'bar',
+  _chartData: [],
+  _tableEditing: null,
+  _tableData: [],
+  _tableStyle: 'striped',
   isDemo: false,
   sidebarExpanded: false,
   theme: 'dark',
@@ -786,6 +934,8 @@ const app = {
     if (id === 'symbol') { this.toggleSymbolPanel(); return; }
     if (id === 'image') { this.promptImageUpload(); return; }
     if (id === 'math') { this.promptMathInput(); return; }
+    if (id === 'chart') { this.openChartModal(); return; }
+    if (id === 'table') { this.openTableModal(); return; }
     // Hide symbol panel when switching away
     document.getElementById('symbol-panel').classList.remove('show');
     this.tool = id;
@@ -1068,6 +1218,635 @@ const app = {
     this.render();
     this.saveData();
     this.toast('Equation placed');
+  },
+
+  // ─── Chart / Plotly support ─────────────────────────────
+  openChartModal(existingEl) {
+    if (existingEl && existingEl.chartConfig) {
+      this._chartEditing = existingEl.id;
+      this._chartType = existingEl.chartConfig.type || 'bar';
+      this._chartData = JSON.parse(JSON.stringify(existingEl.chartConfig.data));
+    } else {
+      this._chartEditing = null;
+      this._chartType = 'bar';
+      this._chartData = [
+        ['X', 'Series 1', 'Series 2'],
+        ['A', '10', '15'],
+        ['B', '25', '18'],
+        ['C', '15', '22'],
+        ['D', '30', '12']
+      ];
+    }
+    document.getElementById('chart-type').value = this._chartType;
+    this.chartBuildTable();
+    this.openModal('modal-chart');
+    setTimeout(() => this.chartUpdatePreview(), 100);
+  },
+
+  closeChartModal() {
+    this.closeModal('modal-chart');
+    this._chartEditing = null;
+  },
+
+  chartSwitchTab(tab) {
+    document.querySelectorAll('.chart-tab').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+    document.getElementById('chart-data-tab').style.display = tab === 'data' ? '' : 'none';
+    document.getElementById('chart-csv-tab').style.display = tab === 'csv' ? '' : 'none';
+    if (tab === 'csv') this.chartExportCSV();
+  },
+
+  chartBuildTable() {
+    const table = document.getElementById('chart-table');
+    const data = this._chartData;
+    if (!data.length) return;
+    let html = '<thead><tr>';
+    data[0].forEach((h, ci) => {
+      html += `<th contenteditable="true" data-r="0" data-c="${ci}">${h}</th>`;
+    });
+    html += '</tr></thead><tbody>';
+    for (let r = 1; r < data.length; r++) {
+      html += '<tr>';
+      for (let c = 0; c < data[0].length; c++) {
+        html += `<td contenteditable="true" data-r="${r}" data-c="${c}">${data[r] && data[r][c] != null ? data[r][c] : ''}</td>`;
+      }
+      html += '</tr>';
+    }
+    html += '</tbody>';
+    table.innerHTML = html;
+    // Attach input listeners
+    table.querySelectorAll('[contenteditable]').forEach(cell => {
+      cell.addEventListener('input', () => {
+        clearTimeout(this._chartDebounce);
+        this._chartDebounce = setTimeout(() => {
+          this.chartReadTable();
+          this.chartUpdatePreview();
+        }, 300);
+      });
+    });
+  },
+
+  chartReadTable() {
+    const table = document.getElementById('chart-table');
+    const rows = table.querySelectorAll('tr');
+    this._chartData = [];
+    rows.forEach(row => {
+      const cells = row.querySelectorAll('th, td');
+      const r = [];
+      cells.forEach(c => r.push(c.textContent.trim()));
+      this._chartData.push(r);
+    });
+  },
+
+  chartAddRow() {
+    this.chartReadTable();
+    const cols = this._chartData[0] ? this._chartData[0].length : 3;
+    const newRow = Array(cols).fill('');
+    newRow[0] = String.fromCharCode(65 + this._chartData.length - 1);
+    this._chartData.push(newRow);
+    this.chartBuildTable();
+    this.chartUpdatePreview();
+  },
+
+  chartRemoveRow() {
+    this.chartReadTable();
+    if (this._chartData.length > 2) {
+      this._chartData.pop();
+      this.chartBuildTable();
+      this.chartUpdatePreview();
+    }
+  },
+
+  chartAddCol() {
+    this.chartReadTable();
+    const colIdx = this._chartData[0] ? this._chartData[0].length : 0;
+    this._chartData[0].push('Series ' + colIdx);
+    for (let r = 1; r < this._chartData.length; r++) {
+      this._chartData[r].push('0');
+    }
+    this.chartBuildTable();
+    this.chartUpdatePreview();
+  },
+
+  chartRemoveCol() {
+    this.chartReadTable();
+    if (this._chartData[0] && this._chartData[0].length > 2) {
+      this._chartData.forEach(row => row.pop());
+      this.chartBuildTable();
+      this.chartUpdatePreview();
+    }
+  },
+
+  chartImportCSV() {
+    const csv = document.getElementById('chart-csv').value.trim();
+    if (!csv) return;
+    const lines = csv.split('\n').map(l => l.split(',').map(c => c.trim().replace(/^"|"$/g, '')));
+    if (lines.length < 2) { this.toast('CSV needs at least a header + 1 data row'); return; }
+    this._chartData = lines;
+    this.chartBuildTable();
+    this.chartUpdatePreview();
+    this.chartSwitchTab('data');
+    this.toast('CSV imported');
+  },
+
+  chartExportCSV() {
+    this.chartReadTable();
+    const csv = this._chartData.map(row => row.join(',')).join('\n');
+    document.getElementById('chart-csv').value = csv;
+  },
+
+  _chartDataToTraces() {
+    const data = this._chartData;
+    if (data.length < 2 || data[0].length < 2) return [];
+    const type = this._chartType;
+    const labels = data.slice(1).map(r => r[0]);
+
+    if (type === 'pie' || type === 'donut') {
+      const values = data.slice(1).map(r => parseFloat(r[1]) || 0);
+      return [{ type: 'pie', labels, values, textinfo: 'label+percent',
+        hole: type === 'donut' ? 0.45 : 0 }];
+    }
+
+    if (type === 'histogram') {
+      const traces = [];
+      for (let c = 1; c < data[0].length; c++) {
+        traces.push({
+          x: data.slice(1).map(r => parseFloat(r[c]) || 0),
+          name: data[0][c],
+          type: 'histogram',
+          opacity: 0.7,
+        });
+      }
+      return traces;
+    }
+
+    if (type === 'waterfall') {
+      const values = data.slice(1).map(r => parseFloat(r[1]) || 0);
+      return [{ type: 'waterfall', x: labels, y: values, name: data[0][1] || 'Value',
+        connector: { line: { color: 'rgb(63,63,63)' } },
+        increasing: { marker: { color: '#22c55e' } },
+        decreasing: { marker: { color: '#ef4444' } },
+        totals: { marker: { color: '#3b82f6' } } }];
+    }
+
+    const traces = [];
+    for (let c = 1; c < data[0].length; c++) {
+      const yVals = data.slice(1).map(r => parseFloat(r[c]) || 0);
+      const trace = { x: labels, y: yVals, name: data[0][c] };
+
+      if (type === 'hbar') {
+        trace.type = 'bar';
+        trace.orientation = 'h';
+        trace.x = yVals;
+        trace.y = labels;
+      } else if (type === 'line') {
+        trace.type = 'scatter';
+        trace.mode = 'lines+markers';
+      } else if (type === 'area') {
+        trace.type = 'scatter';
+        trace.mode = 'lines';
+        trace.fill = c === 1 ? 'tozeroy' : 'tonexty';
+      } else if (type === 'scatter') {
+        trace.type = 'scatter';
+        trace.mode = 'markers';
+      } else if (type === 'bubble') {
+        trace.type = 'scatter';
+        trace.mode = 'markers';
+        trace.marker = { size: yVals.map(v => Math.max(8, Math.abs(v))), sizemode: 'area', sizeref: Math.max(...yVals.map(Math.abs)) / 40 };
+      } else {
+        trace.type = 'bar';
+      }
+      traces.push(trace);
+    }
+    return traces;
+  },
+
+  _chartLayout(traceCount) {
+    const t = this.theme || 'dark';
+    const isDark = t === 'dark';
+    const isEink = t === 'eink';
+    return {
+      paper_bgcolor: 'rgba(0,0,0,0)',
+      plot_bgcolor: isDark ? '#18181b' : isEink ? '#f5f5f5' : '#f4f4f5',
+      font: { color: isDark ? '#fafafa' : '#09090b', size: 11 },
+      margin: { t: 30, r: 20, b: 40, l: 40 },
+      xaxis: { gridcolor: isDark ? '#27272a' : isEink ? '#e0e0e0' : '#e4e4e7' },
+      yaxis: { gridcolor: isDark ? '#27272a' : isEink ? '#e0e0e0' : '#e4e4e7' },
+      showlegend: traceCount > 1,
+      legend: { orientation: 'h', y: -0.2 }
+    };
+  },
+
+  chartUpdatePreview() {
+    if (!window.Plotly) return;
+    this._chartType = document.getElementById('chart-type').value;
+    const traces = this._chartDataToTraces();
+    Plotly.newPlot('chart-preview', traces, this._chartLayout(traces.length), { staticPlot: true, responsive: true });
+  },
+
+  refreshChartImages() {
+    if (!window.Plotly) return;
+    const charts = this.elements.filter(e => e.type === 'chart' && e.chartConfig);
+    if (!charts.length) return;
+    let offscreen = document.getElementById('_chart-offscreen');
+    if (!offscreen) {
+      offscreen = document.createElement('div');
+      offscreen.id = '_chart-offscreen';
+      offscreen.style.cssText = 'position:fixed;left:-9999px;top:-9999px;width:600px;height:400px;';
+      document.body.appendChild(offscreen);
+    }
+    // Save current state to restore after
+    const savedType = this._chartType;
+    const savedData = this._chartData;
+    const renderNext = (i) => {
+      if (i >= charts.length) {
+        this._chartType = savedType;
+        this._chartData = savedData;
+        this.render(); this.saveData();
+        return;
+      }
+      const el = charts[i];
+      const cfg = el.chartConfig;
+      if (!cfg.data || cfg.data.length < 2) { renderNext(i + 1); return; }
+      // Temporarily set state so _chartDataToTraces() works
+      this._chartType = cfg.type || 'bar';
+      this._chartData = cfg.data;
+      const traces = this._chartDataToTraces();
+      Plotly.newPlot(offscreen, traces, this._chartLayout(traces.length), { staticPlot: true }).then(() => {
+        return Plotly.toImage(offscreen, { format: 'png', width: 600, height: 400 });
+      }).then(dataUrl => {
+        el.imageData = dataUrl;
+        renderNext(i + 1);
+      }).catch(() => renderNext(i + 1));
+    };
+    renderNext(0);
+  },
+
+  _rerenderChartElement(el) {
+    if (!window.Plotly || !el.chartConfig) return;
+    let offscreen = document.getElementById('_chart-offscreen');
+    if (!offscreen) {
+      offscreen = document.createElement('div');
+      offscreen.id = '_chart-offscreen';
+      offscreen.style.cssText = 'position:fixed;left:-9999px;top:-9999px;width:600px;height:400px;';
+      document.body.appendChild(offscreen);
+    }
+    const savedType = this._chartType;
+    const savedData = this._chartData;
+    this._chartType = el.chartConfig.type || 'bar';
+    this._chartData = el.chartConfig.data;
+    const traces = this._chartDataToTraces();
+    const w = Math.max(200, Math.round(el.width * 1.5));
+    const h = Math.max(150, Math.round(el.height * 1.5));
+    Plotly.newPlot(offscreen, traces, this._chartLayout(traces.length), { staticPlot: true }).then(() => {
+      return Plotly.toImage(offscreen, { format: 'png', width: w, height: h });
+    }).then(dataUrl => {
+      el.imageData = dataUrl;
+      this._chartType = savedType;
+      this._chartData = savedData;
+      this.render();
+      this.saveData();
+    }).catch(() => {
+      this._chartType = savedType;
+      this._chartData = savedData;
+    });
+  },
+
+  saveChart() {
+    if (!window.Plotly) { this.toast('Plotly not loaded yet'); return; }
+    this.chartReadTable();
+    this._chartType = document.getElementById('chart-type').value;
+    const chartConfig = { type: this._chartType, data: JSON.parse(JSON.stringify(this._chartData)) };
+    const previewEl = document.getElementById('chart-preview');
+
+    Plotly.toImage(previewEl, { format: 'png', width: 600, height: 400 }).then(dataUrl => {
+      if (this._chartEditing) {
+        // Update existing chart element
+        this.pushUndo();
+        const el = this.elements.find(e => e.id === this._chartEditing);
+        if (el) {
+          el.chartConfig = chartConfig;
+          el.imageData = dataUrl;
+          this.render();
+          this.saveData();
+          this.toast('Chart updated');
+        }
+      } else {
+        // Create new chart element
+        this.pushUndo();
+        const el = this.createElement('chart', this.viewport.x + 80, this.viewport.y + 60, 400, 300);
+        el.chartConfig = chartConfig;
+        el.imageData = dataUrl;
+        el.fill = 'transparent';
+        el.stroke = 'none';
+        el.strokeWidth = 0;
+        this.elements.push(el);
+        this.selection = [el.id];
+        this.render();
+        this.saveData();
+        this.toast('Chart inserted');
+      }
+      this.closeChartModal();
+    }).catch(err => {
+      console.error('Chart export failed:', err);
+      this.toast('Failed to export chart');
+    });
+  },
+
+  // ─── Table support ──────────────────────────────────────
+  openTableModal(existingEl) {
+    if (existingEl && existingEl.tableConfig) {
+      this._tableEditing = existingEl.id;
+      this._tableStyle = existingEl.tableConfig.style || 'striped';
+      this._tableData = JSON.parse(JSON.stringify(existingEl.tableConfig.data));
+    } else {
+      this._tableEditing = null;
+      this._tableStyle = 'striped';
+      this._tableData = [
+        ['Name', 'Value', 'Unit'],
+        ['Voltage', '230', 'V'],
+        ['Current', '16', 'A'],
+        ['Power', '3680', 'W'],
+        ['Frequency', '50', 'Hz']
+      ];
+    }
+    document.getElementById('tbl-style').value = this._tableStyle;
+    this.tableBuildTable();
+    this.openModal('modal-table');
+    setTimeout(() => this.tableUpdatePreview(), 50);
+  },
+
+  closeTableModal() {
+    this.closeModal('modal-table');
+    this._tableEditing = null;
+  },
+
+  tableSwitchTab(tab) {
+    document.querySelectorAll('.table-tab').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+    document.getElementById('table-data-tab').style.display = tab === 'data' ? '' : 'none';
+    document.getElementById('table-csv-tab').style.display = tab === 'csv' ? '' : 'none';
+    if (tab === 'csv') this.tableExportCSV();
+  },
+
+  tableBuildTable() {
+    const table = document.getElementById('tbl-table');
+    const data = this._tableData;
+    if (!data.length) return;
+    let html = '<thead><tr>';
+    data[0].forEach((h, ci) => {
+      html += `<th contenteditable="true" data-r="0" data-c="${ci}">${h}</th>`;
+    });
+    html += '</tr></thead><tbody>';
+    for (let r = 1; r < data.length; r++) {
+      html += '<tr>';
+      for (let c = 0; c < data[0].length; c++) {
+        html += `<td contenteditable="true" data-r="${r}" data-c="${c}">${data[r] && data[r][c] != null ? data[r][c] : ''}</td>`;
+      }
+      html += '</tr>';
+    }
+    html += '</tbody>';
+    table.innerHTML = html;
+    table.querySelectorAll('[contenteditable]').forEach(cell => {
+      cell.addEventListener('input', () => {
+        clearTimeout(this._tableDebounce);
+        this._tableDebounce = setTimeout(() => {
+          this.tableReadTable();
+          this.tableUpdatePreview();
+        }, 300);
+      });
+    });
+  },
+
+  tableReadTable() {
+    const table = document.getElementById('tbl-table');
+    const rows = table.querySelectorAll('tr');
+    this._tableData = [];
+    rows.forEach(row => {
+      const cells = row.querySelectorAll('th, td');
+      const r = [];
+      cells.forEach(c => r.push(c.textContent.trim()));
+      this._tableData.push(r);
+    });
+  },
+
+  tableAddRow() {
+    this.tableReadTable();
+    const cols = this._tableData[0] ? this._tableData[0].length : 3;
+    this._tableData.push(Array(cols).fill(''));
+    this.tableBuildTable();
+    this.tableUpdatePreview();
+  },
+
+  tableRemoveRow() {
+    this.tableReadTable();
+    if (this._tableData.length > 2) {
+      this._tableData.pop();
+      this.tableBuildTable();
+      this.tableUpdatePreview();
+    }
+  },
+
+  tableAddCol() {
+    this.tableReadTable();
+    const colIdx = this._tableData[0] ? this._tableData[0].length : 0;
+    this._tableData[0].push('Col ' + (colIdx + 1));
+    for (let r = 1; r < this._tableData.length; r++) {
+      this._tableData[r].push('');
+    }
+    this.tableBuildTable();
+    this.tableUpdatePreview();
+  },
+
+  tableRemoveCol() {
+    this.tableReadTable();
+    if (this._tableData[0] && this._tableData[0].length > 2) {
+      this._tableData.forEach(row => row.pop());
+      this.tableBuildTable();
+      this.tableUpdatePreview();
+    }
+  },
+
+  tableImportCSV() {
+    const csv = document.getElementById('tbl-csv').value.trim();
+    if (!csv) return;
+    const lines = csv.split('\n').map(l => l.split(',').map(c => c.trim().replace(/^"|"$/g, '')));
+    if (lines.length < 2) { this.toast('CSV needs at least a header + 1 data row'); return; }
+    this._tableData = lines;
+    this.tableBuildTable();
+    this.tableUpdatePreview();
+    this.tableSwitchTab('data');
+    this.toast('CSV imported');
+  },
+
+  tableExportCSV() {
+    this.tableReadTable();
+    const csv = this._tableData.map(row => row.join(',')).join('\n');
+    document.getElementById('tbl-csv').value = csv;
+  },
+
+  tableUpdatePreview() {
+    this._tableStyle = document.getElementById('tbl-style').value;
+    this.tableReadTable();
+    const data = this._tableData;
+    if (!data.length) return;
+    const prev = document.getElementById('tbl-preview');
+    let html = '<table><thead><tr>';
+    data[0].forEach(h => { html += `<th>${h}</th>`; });
+    html += '</tr></thead><tbody>';
+    for (let r = 1; r < data.length; r++) {
+      html += '<tr>';
+      data[r].forEach(c => { html += `<td>${c}</td>`; });
+      html += '</tr>';
+    }
+    html += '</tbody></table>';
+    prev.innerHTML = html;
+  },
+
+  _renderTableImage(data, style, width, height) {
+    const canvas = document.createElement('canvas');
+    const dpr = 2;
+    canvas.width = width * dpr;
+    canvas.height = height * dpr;
+    const ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+
+    const t = this.theme || 'dark';
+    const isDark = t === 'dark';
+    const isEink = t === 'eink';
+
+    // Theme colors
+    const bgColor = isDark ? '#18181b' : isEink ? '#f5f5f5' : '#ffffff';
+    const headerBg = isDark ? '#f59e0b' : isEink ? '#000000' : '#0066b2';
+    const headerFg = isDark ? '#18181b' : '#ffffff';
+    const cellFg = isDark ? '#fafafa' : '#09090b';
+    const borderColor = isDark ? '#27272a' : isEink ? '#c0c0c0' : '#e4e4e7';
+    const stripeBg = isDark ? '#1e1e22' : isEink ? '#eeeeee' : '#f4f4f5';
+
+    if (!data || data.length < 1) return canvas.toDataURL('image/png');
+
+    const cols = data[0].length;
+    const rows = data.length;
+    const colW = width / cols;
+    const headerH = 28;
+    const rowH = Math.min(24, (height - headerH) / Math.max(1, rows - 1));
+    const fontSize = Math.min(12, rowH * 0.55);
+
+    // Background
+    ctx.fillStyle = bgColor;
+    ctx.fillRect(0, 0, width, height);
+
+    // Header
+    ctx.fillStyle = headerBg;
+    ctx.fillRect(0, 0, width, headerH);
+    ctx.fillStyle = headerFg;
+    ctx.font = `bold ${fontSize}px "JetBrains Mono", monospace`;
+    ctx.textBaseline = 'middle';
+    data[0].forEach((h, c) => {
+      ctx.fillText(h, c * colW + 8, headerH / 2, colW - 16);
+    });
+
+    // Data rows
+    ctx.font = `${fontSize}px "JetBrains Mono", monospace`;
+    for (let r = 1; r < rows; r++) {
+      const y = headerH + (r - 1) * rowH;
+      // Stripe background
+      if (style === 'striped' && r % 2 === 0) {
+        ctx.fillStyle = stripeBg;
+        ctx.fillRect(0, y, width, rowH);
+      }
+      // Cell text
+      ctx.fillStyle = cellFg;
+      for (let c = 0; c < cols; c++) {
+        const val = (data[r] && data[r][c]) || '';
+        ctx.fillText(val, c * colW + 8, y + rowH / 2, colW - 16);
+      }
+    }
+
+    // Grid lines
+    ctx.strokeStyle = borderColor;
+    ctx.lineWidth = 0.5;
+    if (style === 'bordered' || style === 'dark-header') {
+      // Full grid
+      for (let r = 0; r <= rows; r++) {
+        const y = r === 0 ? 0 : headerH + (r - 1) * rowH;
+        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(width, y); ctx.stroke();
+      }
+      for (let c = 0; c <= cols; c++) {
+        ctx.beginPath(); ctx.moveTo(c * colW, 0); ctx.lineTo(c * colW, headerH + (rows - 1) * rowH); ctx.stroke();
+      }
+    } else {
+      // Row lines only
+      for (let r = 1; r < rows; r++) {
+        const y = headerH + (r - 1) * rowH;
+        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(width, y); ctx.stroke();
+      }
+    }
+    // Bottom border
+    const bottomY = headerH + (rows - 1) * rowH;
+    ctx.beginPath(); ctx.moveTo(0, bottomY); ctx.lineTo(width, bottomY); ctx.stroke();
+    // Outer border
+    if (style !== 'minimal') {
+      ctx.strokeStyle = borderColor;
+      ctx.lineWidth = 1;
+      ctx.strokeRect(0, 0, width, bottomY);
+    }
+
+    return canvas.toDataURL('image/png');
+  },
+
+  saveTable() {
+    this.tableReadTable();
+    this._tableStyle = document.getElementById('tbl-style').value;
+    const tableConfig = { style: this._tableStyle, data: JSON.parse(JSON.stringify(this._tableData)) };
+    const w = Math.max(300, this._tableData[0].length * 120);
+    const h = Math.max(100, this._tableData.length * 26 + 10);
+    const imageData = this._renderTableImage(this._tableData, this._tableStyle, w, h);
+
+    if (this._tableEditing) {
+      this.pushUndo();
+      const el = this.elements.find(e => e.id === this._tableEditing);
+      if (el) {
+        el.tableConfig = tableConfig;
+        el.imageData = imageData;
+        el.width = w;
+        el.height = h;
+        this.render();
+        this.saveData();
+        this.toast('Table updated');
+      }
+    } else {
+      this.pushUndo();
+      const el = this.createElement('table', this.viewport.x + 80, this.viewport.y + 60, w, h);
+      el.tableConfig = tableConfig;
+      el.imageData = imageData;
+      el.fill = 'transparent';
+      el.stroke = 'none';
+      el.strokeWidth = 0;
+      this.elements.push(el);
+      this.selection = [el.id];
+      this.render();
+      this.saveData();
+      this.toast('Table inserted');
+    }
+    this.closeTableModal();
+  },
+
+  _rerenderTableElement(el) {
+    if (!el.tableConfig) return;
+    const cfg = el.tableConfig;
+    const imageData = this._renderTableImage(cfg.data, cfg.style, Math.round(el.width), Math.round(el.height));
+    el.imageData = imageData;
+    this.render();
+    this.saveData();
+  },
+
+  refreshTableImages() {
+    const tables = this.elements.filter(e => e.type === 'table' && e.tableConfig);
+    if (!tables.length) return;
+    tables.forEach(el => {
+      el.imageData = this._renderTableImage(el.tableConfig.data, el.tableConfig.style, Math.round(el.width), Math.round(el.height));
+    });
+    this.render();
+    this.saveData();
   },
 
   toggleSidebar() {
@@ -1521,9 +2300,17 @@ const app = {
 
     // Finish resize
     if (this.resizing) {
+      const resizedEl = this.resizing.el;
       this.pushUndo();
       this.resizing = null;
       this.saveData();
+      // Re-render chart/table image at new size
+      if (resizedEl && resizedEl.type === 'chart' && resizedEl.chartConfig) {
+        this._rerenderChartElement(resizedEl);
+      }
+      if (resizedEl && resizedEl.type === 'table' && resizedEl.tableConfig) {
+        this._rerenderTableElement(resizedEl);
+      }
     }
 
     // Finish rubber band
@@ -2112,6 +2899,15 @@ const app = {
         }
         fo.appendChild(div);
         group.appendChild(fo);
+      } else if (el.type === 'chart' || el.type === 'table') {
+        const img = document.createElementNS(SVG_NS, 'image');
+        img.setAttribute('x', el.x);
+        img.setAttribute('y', el.y);
+        img.setAttribute('width', el.width);
+        img.setAttribute('height', el.height);
+        if (el.imageData) img.setAttribute('href', el.imageData);
+        img.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+        group.appendChild(img);
       } else if (el.type === 'text') {
         // Just text, no background (or transparent bg)
         if (el.fill && el.fill !== 'transparent') {
@@ -2606,6 +3402,16 @@ const app = {
       this.promptImageUpload();
       return;
     }
+    // Chart elements: open chart editor
+    if (el.type === 'chart') {
+      this.openChartModal(el);
+      return;
+    }
+    // Table elements: open table editor
+    if (el.type === 'table') {
+      this.openTableModal(el);
+      return;
+    }
     this._editingId = id;
     document.getElementById('edit-text').value = el.text || '';
     document.getElementById('edit-type').value = el.type;
@@ -2636,9 +3442,15 @@ const app = {
     if (sel.length === 0) return;
     const el = sel[0];
     const isSym = el.type === 'engineering-block';
+    const isChart = el.type === 'chart' || el.type === 'table';
+    const isImg = el.type === 'image';
+    const isMediaEl = isChart || isImg;
     // Show/hide prop groups based on element type
-    document.getElementById('pg-fill').style.display = isSym ? 'none' : '';
-    document.getElementById('pg-opacity').style.display = isSym ? 'none' : '';
+    document.getElementById('pg-fill').style.display = (isSym || isMediaEl) ? 'none' : '';
+    document.getElementById('pg-opacity').style.display = (isSym || isMediaEl) ? 'none' : '';
+    document.getElementById('pg-stroke').style.display = isMediaEl ? 'none' : '';
+    document.getElementById('pg-stroke-width').style.display = isMediaEl ? 'none' : '';
+    document.getElementById('pg-font-size').style.display = isMediaEl ? 'none' : '';
     document.getElementById('pg-icon-size').style.display = isSym ? '' : 'none';
     // Sync values
     if (!isSym) {
@@ -2906,6 +3718,8 @@ const app = {
     localStorage.setItem('fb_theme', this.theme);
     this.toast('Theme: ' + this.theme);
     this.render();
+    this.refreshChartImages();
+    this.refreshTableImages();
   },
 
   // ─── Modals ──────────────────────────────────────────────
@@ -3476,6 +4290,13 @@ const app = {
       if (window.katex) { try { katex.render(el.latex || '', div, { throwOnError: false, displayMode: true }); } catch(e) { div.textContent = el.latex || ''; } }
       else { div.textContent = el.latex || ''; }
       fo.appendChild(div); group.appendChild(fo);
+    } else if ((el.type === 'chart' || el.type === 'table') && el.imageData) {
+      const img = document.createElementNS(SVG_NS, 'image');
+      img.setAttribute('x', el.x); img.setAttribute('y', el.y);
+      img.setAttribute('width', el.width); img.setAttribute('height', el.height);
+      img.setAttribute('href', el.imageData);
+      img.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+      group.appendChild(img);
     }
     if (el.text) {
       const fo = document.createElementNS(SVG_NS, 'foreignObject');
