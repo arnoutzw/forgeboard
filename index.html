@@ -425,23 +425,28 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent)}
 
     <!-- Properties bar -->
     <div id="props-bar">
-      <div class="prop-group">
+      <div class="prop-group" id="pg-fill">
         <span class="prop-label">Fill</span>
         <input type="color" class="prop-color" id="prop-fill" value="#292524" onchange="app.setProp('fill',this.value)">
       </div>
-      <div class="prop-group">
+      <div class="prop-group" id="pg-stroke">
         <span class="prop-label">Stroke</span>
         <input type="color" class="prop-color" id="prop-stroke" value="#f59e0b" onchange="app.setProp('stroke',this.value)">
       </div>
-      <div class="prop-group">
+      <div class="prop-group" id="pg-stroke-width">
         <span class="prop-label">Width</span>
         <input type="number" class="prop-input" id="prop-stroke-width" value="2" min="0" max="20" onchange="app.setProp('strokeWidth',+this.value)">
       </div>
-      <div class="prop-group">
+      <div class="prop-group" id="pg-font-size">
         <span class="prop-label">Font</span>
         <input type="number" class="prop-input" id="prop-font-size" value="14" min="8" max="72" onchange="app.setProp('fontSize',+this.value)">
       </div>
-      <div class="prop-group">
+      <div class="prop-group" id="pg-icon-size">
+        <span class="prop-label">Icon</span>
+        <input type="range" style="width:80px" id="prop-icon-scale" min="0.5" max="2" step="0.1" value="1" oninput="app.setProp('iconScale',+this.value)">
+        <span class="prop-label" id="prop-icon-scale-val" style="min-width:28px">1×</span>
+      </div>
+      <div class="prop-group" id="pg-opacity">
         <span class="prop-label">Opacity</span>
         <input type="range" style="width:80px" id="prop-opacity" min="0" max="1" step="0.05" value="1" oninput="app.setProp('opacity',+this.value)">
       </div>
@@ -1129,6 +1134,8 @@ const app = {
             el.symbolCircle = s.circle || false;
             el.symbolFill = s.fillColor || '';
             el.symbolDash = s.dasharray || '';
+            el.opacity = 1;
+            el.iconScale = 1;
             this.elements.push(el);
             this.selection = [el.id];
             this.render();
@@ -1840,7 +1847,8 @@ const app = {
           const labelH = el.text ? 20 : 0;
           const availW = el.width - pad * 2;
           const availH = el.height - pad * 2 - labelH;
-          const scale = Math.min(availW / 24, availH / 24);
+          const baseScale = Math.min(availW / 24, availH / 24);
+          const scale = baseScale * (el.iconScale || 1);
           const ox = el.x + (el.width - 24 * scale) / 2;
           const oy = el.y + pad + (availH - 24 * scale) / 2;
           const sg = document.createElementNS(SVG_NS, 'g');
@@ -2417,11 +2425,24 @@ const app = {
     const sel = this.getSelectedElements();
     if (sel.length === 0) return;
     const el = sel[0];
-    document.getElementById('prop-fill').value = el.fill || this._themeBg2();
+    const isSym = el.type === 'engineering-block';
+    // Show/hide prop groups based on element type
+    document.getElementById('pg-fill').style.display = isSym ? 'none' : '';
+    document.getElementById('pg-opacity').style.display = isSym ? 'none' : '';
+    document.getElementById('pg-icon-size').style.display = isSym ? '' : 'none';
+    // Sync values
+    if (!isSym) {
+      document.getElementById('prop-fill').value = el.fill || this._themeBg2();
+      document.getElementById('prop-opacity').value = el.opacity || 1;
+    }
     document.getElementById('prop-stroke').value = el.stroke || this._themeAccent();
     document.getElementById('prop-stroke-width').value = el.strokeWidth || 2;
     document.getElementById('prop-font-size').value = el.fontSize || 14;
-    document.getElementById('prop-opacity').value = el.opacity || 1;
+    if (isSym) {
+      const sc = el.iconScale || 1;
+      document.getElementById('prop-icon-scale').value = sc;
+      document.getElementById('prop-icon-scale-val').textContent = sc + '×';
+    }
     document.getElementById('props-bar').classList.add('show');
   },
 
@@ -2433,7 +2454,15 @@ const app = {
     const sel = this.getSelectedElements();
     if (sel.length === 0) return;
     this.pushUndo();
-    sel.forEach(el => { el[prop] = val; });
+    sel.forEach(el => {
+      // Symbols: fill and opacity are locked
+      if (el.type === 'engineering-block' && (prop === 'fill' || prop === 'opacity')) return;
+      el[prop] = val;
+    });
+    // Update icon scale display
+    if (prop === 'iconScale') {
+      document.getElementById('prop-icon-scale-val').textContent = val + '×';
+    }
     this.render();
     this.saveData();
   },
@@ -2951,6 +2980,8 @@ const app = {
     el.symbolCircle = s.circle || false;
     el.symbolFill = s.fillColor || '';
     el.symbolDash = s.dasharray || '';
+    el.opacity = 1;
+    el.iconScale = 1;
     this.elements.push(el);
     this.selection = [el.id];
     this.render();
@@ -3182,7 +3213,8 @@ const app = {
       if (isSymbol && el.symbolPath) {
         const pad = 8, labelH = el.text ? 20 : 0;
         const availW = el.width - pad * 2, availH = el.height - pad * 2 - labelH;
-        const scale = Math.min(availW / 24, availH / 24);
+        const baseScale = Math.min(availW / 24, availH / 24);
+        const scale = baseScale * (el.iconScale || 1);
         const ox = el.x + (el.width - 24 * scale) / 2;
         const oy = el.y + pad + (availH - 24 * scale) / 2;
         const sg = document.createElementNS(SVG_NS, 'g');
