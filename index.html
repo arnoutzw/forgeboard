@@ -58,6 +58,14 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent)}
 .zoom-display{font-size:11px;color:var(--fg2);min-width:44px;text-align:center}
 .h-group{display:flex;align-items:center;gap:2px}
 
+/* Project selector */
+.project-selector{display:none;align-items:center;gap:6px;margin-left:4px}
+.project-selector.show{display:flex}
+.project-selector select{background:var(--bg3);color:var(--fg);border:1px solid var(--bg4);border-radius:var(--radius);padding:4px 8px;font-size:11px;font-family:var(--font);cursor:pointer;max-width:180px;outline:none}
+.project-selector select:focus{border-color:var(--accent)}
+.project-selector select option{background:var(--bg2);color:var(--fg)}
+.project-selector-label{font-size:10px;color:var(--fg3);text-transform:uppercase;letter-spacing:.5px}
+
 /* Canvas */
 #svg-canvas{position:absolute;top:0;left:0;width:100%;height:100%;touch-action:none}
 #draw-canvas{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;touch-action:none}
@@ -426,6 +434,13 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent)}
       <button class="h-btn" onclick="app.toggleSidebar()" title="Toggle sidebar">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
       </button>
+      <div class="project-selector" id="project-selector">
+        <span class="project-selector-label">Project</span>
+        <select id="project-dropdown" onchange="app.switchProject(this.value)">
+          <option value="">-- Select project --</option>
+        </select>
+      </div>
+      <div class="h-sep" id="project-sep" style="display:none"></div>
       <span class="h-title" id="board-name" onclick="app.renameBoard()">Untitled Board</span>
       <div class="h-group">
         <button class="h-btn" onclick="app.zoomIn()" title="Zoom in"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg></button>
@@ -713,6 +728,377 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent)}
 <!-- Hidden file input -->
 <input type="file" id="file-input" accept=".json" style="display:none" onchange="app.handleImport(event)">
 
+<!-- Firebase SDK (compat) -->
+<script src="https://www.gstatic.com/firebasejs/10.14.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.0/firebase-auth-compat.js"></script>
+
+<!-- DemoFirestore shim — intercepts Firebase calls in demo mode -->
+<script>
+(function() {
+  // Check if demo mode is active
+  var params = new URLSearchParams(window.location.search);
+  var isDemoFromURL = params.has('demo') || params.get('demo') === 'true' || params.get('mode') === 'demo';
+  var isDemoFromLS = localStorage.getItem('app_demo_mode') === 'true';
+  window.DEMO_MODE = isDemoFromURL || isDemoFromLS;
+
+  if (isDemoFromURL && !isDemoFromLS) {
+    localStorage.setItem('app_demo_mode', 'true');
+  }
+
+  if (!window.DEMO_MODE) return;
+
+  console.log('[Demo Mode] Active - using local database');
+
+  // ===== Local Storage Database =====
+  var DB_PREFIX = 'demo_db_';
+
+  function getStore(path) {
+    var key = DB_PREFIX + path;
+    try { return JSON.parse(localStorage.getItem(key)) || {}; }
+    catch(e) { return {}; }
+  }
+
+  function setStore(path, data) {
+    localStorage.setItem(DB_PREFIX + path, JSON.stringify(data));
+    notifyListeners(path);
+  }
+
+  function genId() {
+    return 'demo_' + Date.now().toString(36) + '_' + Math.random().toString(36).substr(2, 9);
+  }
+
+  // ===== Snapshot Listeners =====
+  var listeners = {};
+
+  function addListener(path, cb) {
+    if (!listeners[path]) listeners[path] = [];
+    listeners[path].push(cb);
+    return function() {
+      listeners[path] = (listeners[path] || []).filter(function(fn) { return fn !== cb; });
+    };
+  }
+
+  function notifyListeners(path) {
+    // Notify exact path listeners
+    (listeners[path] || []).forEach(function(cb) {
+      try { cb(); } catch(e) { console.warn('[Demo] listener error:', e); }
+    });
+    // Notify parent collection listeners
+    var parts = path.split('/');
+    for (var i = parts.length - 1; i > 0; i--) {
+      var parent = parts.slice(0, i).join('/');
+      (listeners[parent] || []).forEach(function(cb) {
+        try { cb(); } catch(e) {}
+      });
+    }
+  }
+
+  // ===== Query Implementation =====
+  function applyWhere(docs, field, op, value) {
+    return docs.filter(function(d) {
+      var v = field.split('.').reduce(function(o, k) { return o && o[k]; }, d.data);
+      switch(op) {
+        case '==': return v === value;
+        case '!=': return v !== value;
+        case '<': return v < value;
+        case '<=': return v <= value;
+        case '>': return v > value;
+        case '>=': return v >= value;
+        case 'in': return Array.isArray(value) && value.indexOf(v) >= 0;
+        case 'array-contains': return Array.isArray(v) && v.indexOf(value) >= 0;
+        default: return true;
+      }
+    });
+  }
+
+  function applyOrderBy(docs, field, dir) {
+    return docs.slice().sort(function(a, b) {
+      var va = field.split('.').reduce(function(o, k) { return o && o[k]; }, a.data);
+      var vb = field.split('.').reduce(function(o, k) { return o && o[k]; }, b.data);
+      if (va < vb) return dir === 'desc' ? 1 : -1;
+      if (va > vb) return dir === 'desc' ? -1 : 1;
+      return 0;
+    });
+  }
+
+  // ===== Document Snapshot =====
+  function makeDocSnap(id, data, path) {
+    return {
+      id: id,
+      ref: makeDocRef(path + '/' + id),
+      exists: data !== undefined && data !== null,
+      data: function() { return data ? JSON.parse(JSON.stringify(data)) : undefined; },
+      get: function(field) { return data ? data[field] : undefined; }
+    };
+  }
+
+  // ===== Query Snapshot =====
+  function makeQuerySnap(docs) {
+    return {
+      docs: docs,
+      empty: docs.length === 0,
+      size: docs.length,
+      forEach: function(cb) { docs.forEach(cb); }
+    };
+  }
+
+  // ===== Document Reference =====
+  function makeDocRef(path) {
+    var parts = path.split('/');
+    var docId = parts[parts.length - 1];
+    var colPath = parts.slice(0, -1).join('/');
+
+    return {
+      id: docId,
+      path: path,
+      parent: { path: colPath },
+      collection: function(subCol) {
+        return makeCollRef(path + '/' + subCol);
+      },
+      get: function() {
+        var store = getStore(colPath);
+        var data = store[docId] || null;
+        return Promise.resolve(makeDocSnap(docId, data, colPath));
+      },
+      set: function(data, opts) {
+        var store = getStore(colPath);
+        if (opts && opts.merge && store[docId]) {
+          store[docId] = Object.assign({}, store[docId], data);
+        } else {
+          store[docId] = JSON.parse(JSON.stringify(data));
+        }
+        setStore(colPath, store);
+        return Promise.resolve();
+      },
+      update: function(data) {
+        var store = getStore(colPath);
+        if (!store[docId]) store[docId] = {};
+        Object.keys(data).forEach(function(k) { store[docId][k] = data[k]; });
+        setStore(colPath, store);
+        return Promise.resolve();
+      },
+      delete: function() {
+        var store = getStore(colPath);
+        delete store[docId];
+        setStore(colPath, store);
+        return Promise.resolve();
+      },
+      onSnapshot: function(cb, errCb) {
+        var handler = function() {
+          var store = getStore(colPath);
+          var data = store[docId] || null;
+          cb(makeDocSnap(docId, data, colPath));
+        };
+        handler(); // Initial call
+        return addListener(colPath, handler);
+      }
+    };
+  }
+
+  // ===== Collection Reference / Query =====
+  function makeCollRef(path) {
+    return makeQuery(path, []);
+  }
+
+  function makeQuery(path, filters) {
+    var q = {
+      path: path,
+      doc: function(id) {
+        if (!id) id = genId();
+        return makeDocRef(path + '/' + id);
+      },
+      add: function(data) {
+        var id = genId();
+        var store = getStore(path);
+        var docData = JSON.parse(JSON.stringify(data));
+        store[id] = docData;
+        setStore(path, store);
+        var ref = makeDocRef(path + '/' + id);
+        ref._id = id;
+        return Promise.resolve(ref);
+      },
+      where: function(field, op, value) {
+        var newFilters = filters.concat([{ type: 'where', field: field, op: op, value: value }]);
+        return makeQuery(path, newFilters);
+      },
+      orderBy: function(field, dir) {
+        var newFilters = filters.concat([{ type: 'orderBy', field: field, dir: dir || 'asc' }]);
+        return makeQuery(path, newFilters);
+      },
+      limit: function(n) {
+        var newFilters = filters.concat([{ type: 'limit', n: n }]);
+        return makeQuery(path, newFilters);
+      },
+      get: function() {
+        var store = getStore(path);
+        var docs = Object.keys(store).map(function(id) {
+          return { id: id, data: store[id] };
+        });
+        // Apply filters
+        filters.forEach(function(f) {
+          if (f.type === 'where') docs = applyWhere(docs, f.field, f.op, f.value);
+          if (f.type === 'orderBy') docs = applyOrderBy(docs, f.field, f.dir);
+          if (f.type === 'limit') docs = docs.slice(0, f.n);
+        });
+        var snaps = docs.map(function(d) { return makeDocSnap(d.id, d.data, path); });
+        return Promise.resolve(makeQuerySnap(snaps));
+      },
+      onSnapshot: function(cbOrOpts, cbOrErr, errCb) {
+        var cb = typeof cbOrOpts === 'function' ? cbOrOpts : cbOrErr;
+        var handler = function() {
+          var store = getStore(path);
+          var docs = Object.keys(store).map(function(id) {
+            return { id: id, data: store[id] };
+          });
+          filters.forEach(function(f) {
+            if (f.type === 'where') docs = applyWhere(docs, f.field, f.op, f.value);
+            if (f.type === 'orderBy') docs = applyOrderBy(docs, f.field, f.dir);
+            if (f.type === 'limit') docs = docs.slice(0, f.n);
+          });
+          var snaps = docs.map(function(d) { return makeDocSnap(d.id, d.data, path); });
+          cb(makeQuerySnap(snaps));
+        };
+        handler(); // Initial call
+        return addListener(path, handler);
+      }
+    };
+    return q;
+  }
+
+  // ===== Batch Writes =====
+  function makeBatch() {
+    var ops = [];
+    return {
+      set: function(ref, data, opts) { ops.push({ type: 'set', ref: ref, data: data, opts: opts }); },
+      update: function(ref, data) { ops.push({ type: 'update', ref: ref, data: data }); },
+      delete: function(ref) { ops.push({ type: 'delete', ref: ref }); },
+      commit: function() {
+        return Promise.all(ops.map(function(op) {
+          if (op.type === 'set') return op.ref.set(op.data, op.opts);
+          if (op.type === 'update') return op.ref.update(op.data);
+          if (op.type === 'delete') return op.ref.delete();
+        }));
+      }
+    };
+  }
+
+  // ===== Demo User =====
+  var DEMO_USER = {
+    uid: 'demo-user-001',
+    email: 'demo@blacksphereindustries.nl',
+    displayName: 'Demo User',
+    photoURL: null,
+    isAnonymous: false,
+    emailVerified: true,
+    getIdToken: function() { return Promise.resolve('demo-token'); },
+    reload: function() { return Promise.resolve(); }
+  };
+  window.DEMO_USER = DEMO_USER;
+
+  // ===== Override Firebase =====
+  // Wait for firebase to load, then override
+  var _origFirebase = null;
+
+  function overrideFirebase() {
+    if (typeof firebase === 'undefined') {
+      setTimeout(overrideFirebase, 50);
+      return;
+    }
+
+    _origFirebase = {
+      firestore: firebase.firestore,
+      auth: firebase.auth
+    };
+
+    // Override firestore()
+    var demoDb = {
+      collection: function(name) { return makeCollRef(name); },
+      doc: function(path) { return makeDocRef(path); },
+      batch: function() { return makeBatch(); },
+      runTransaction: function(fn) {
+        var t = {
+          get: function(ref) { return ref.get(); },
+          set: function(ref, data, opts) { return ref.set(data, opts); },
+          update: function(ref, data) { return ref.update(data); },
+          delete: function(ref) { return ref.delete(); }
+        };
+        return fn(t);
+      }
+    };
+
+    firebase.firestore = function() { return demoDb; };
+    firebase.firestore.FieldValue = {
+      serverTimestamp: function() { return new Date().toISOString(); },
+      arrayUnion: function() { return { _type: 'arrayUnion', values: Array.from(arguments) }; },
+      arrayRemove: function() { return { _type: 'arrayRemove', values: Array.from(arguments) }; },
+      increment: function(n) { return { _type: 'increment', value: n }; },
+      delete: function() { return { _type: 'delete' }; }
+    };
+    firebase.firestore.Timestamp = {
+      now: function() { return { toDate: function() { return new Date(); }, seconds: Math.floor(Date.now()/1000) }; },
+      fromDate: function(d) { return { toDate: function() { return d; }, seconds: Math.floor(d.getTime()/1000) }; }
+    };
+
+    // Override auth()
+    var authListeners = [];
+    var currentUser = DEMO_USER;
+
+    firebase.auth = function() {
+      return {
+        currentUser: currentUser,
+        onAuthStateChanged: function(cb) {
+          authListeners.push(cb);
+          setTimeout(function() { cb(currentUser); }, 10);
+          return function() { authListeners = authListeners.filter(function(fn) { return fn !== cb; }); };
+        },
+        signInWithPopup: function() { return Promise.resolve({ user: currentUser }); },
+        signInAnonymously: function() {
+          currentUser = Object.assign({}, DEMO_USER, { isAnonymous: true, displayName: 'Guest User' });
+          return Promise.resolve({ user: currentUser });
+        },
+        signInWithEmailAndPassword: function() { return Promise.resolve({ user: currentUser }); },
+        signOut: function() {
+          localStorage.removeItem('app_demo_mode');
+          window.location.search = '';
+          return Promise.resolve();
+        },
+        GoogleAuthProvider: function() { return {}; }
+      };
+    };
+    firebase.auth.GoogleAuthProvider = function() { return {}; };
+    firebase.auth.GoogleAuthProvider.PROVIDER_ID = 'google.com';
+
+    Object.defineProperty(firebase, 'apps', { get: function() { return [{ name: '[DEFAULT]', options: {} }]; }, configurable: true });
+    console.log('[Demo Mode] Firebase overridden with local database');
+  }
+
+  overrideFirebase();
+
+  // ===== Demo Mode Banner =====
+  window.addEventListener('DOMContentLoaded', function() {
+    var banner = document.createElement('div');
+    banner.id = 'demo-mode-banner';
+    banner.innerHTML = '<span style="margin-right:12px">\u26a1 Demo Mode</span><span style="opacity:0.7;margin-right:12px">Data is stored locally in your browser</span><button id="demo-exit-btn" style="background:rgba(255,255,255,0.2);border:1px solid rgba(255,255,255,0.3);color:inherit;padding:2px 12px;border-radius:4px;cursor:pointer;font-size:12px">Exit Demo</button><button id="demo-reset-btn" style="background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);color:inherit;padding:2px 12px;border-radius:4px;cursor:pointer;font-size:12px;margin-left:6px">Reset Data</button>';
+    banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:linear-gradient(90deg,#10069f,#1297e4);color:white;padding:6px 16px;font-size:13px;font-family:system-ui,sans-serif;display:flex;align-items:center;box-shadow:0 2px 8px rgba(0,0,0,0.2);';
+    document.body.appendChild(banner);
+    // Push page content down
+    document.body.style.paddingTop = (banner.offsetHeight) + 'px';
+
+    document.getElementById('demo-exit-btn').onclick = function() {
+      localStorage.removeItem('app_demo_mode');
+      // Clear demo data
+      Object.keys(localStorage).forEach(function(k) { if (k.startsWith('demo_db_')) localStorage.removeItem(k); });
+      window.location.href = window.location.pathname;
+    };
+    document.getElementById('demo-reset-btn').onclick = function() {
+      Object.keys(localStorage).forEach(function(k) { if (k.startsWith('demo_db_')) localStorage.removeItem(k); });
+      window.location.reload();
+    };
+  });
+})();
+</script>
+
 <script>
 /* =========================================================================
    ForgeBoard — Digital Whiteboard for Engineering Teams
@@ -783,6 +1169,18 @@ const STICKY_COLORS = ['#fbbf24','#34d399','#60a5fa','#f87171','#c084fc','#f472b
 const SHAPE_FILLS = ['#292524','#1e3a5f','#1a332a','#3b1a1a','#2d1b4e','transparent'];
 const STROKE_COLORS = ['#f59e0b','#3b82f6','#22c55e','#ef4444','#8b5cf6','#ec4899','#71717a','#ffffff'];
 
+// ─── Firebase Initialization ─────────────────────────────────────
+let _firebaseInitialized = false;
+let db = null;
+
+function initFirebaseIfNeeded(config) {
+  if (_firebaseInitialized || !config || !config.apiKey) return;
+  firebase.initializeApp(config);
+  db = firebase.firestore();
+  _firebaseInitialized = true;
+  console.log('[ForgeBoard] Firebase initialized');
+}
+
 // ─── Main Application ────────────────────────────────────────────
 const app = {
   // State
@@ -823,6 +1221,10 @@ const app = {
   sidebarExpanded: false,
   theme: 'dark',
   ssoUser: null,
+  currentUser: null,
+  projects: [],
+  activeProjectId: null,
+  _firestoreUnsubscribe: null,
 
   // ─── Init ────────────────────────────────────────────────
   init() {
@@ -846,6 +1248,7 @@ const app = {
     this.render();
     if (this.isDemo) {
       document.getElementById('demo-banner').classList.add('show');
+      this.setupDemoProject();
       if (this.boards.length === 0) this.loadDemoData();
     }
     if (this.boards.length === 0) {
@@ -869,7 +1272,45 @@ const app = {
 
   setupSSO() {
     window.addEventListener('message', (e) => {
-      if (e.data && e.data.type === 'sso-user') {
+      if (!e.data) return;
+
+      // Portal SSO authentication
+      if (e.data.type === 'admin-auth') {
+        const { firebaseConfig, projects, sso } = e.data;
+        initFirebaseIfNeeded(firebaseConfig);
+        if (sso) {
+          this.currentUser = {
+            uid: sso.uid || sso.id,
+            email: sso.email,
+            name: sso.name || sso.displayName || sso.email,
+            role: sso.role || 'viewer',
+          };
+          this.ssoUser = this.currentUser;
+          const av = document.getElementById('user-avatar');
+          if (av) av.textContent = (this.currentUser.name || 'U')[0].toUpperCase();
+        }
+        if (Array.isArray(projects)) {
+          this.projects = projects;
+          this.renderProjectSelector();
+        }
+        console.log('[ForgeBoard] admin-auth received', { user: this.currentUser?.email, projects: this.projects.length });
+      }
+
+      // Portal selected a project
+      if (e.data.type === 'active-project' && e.data.projectId) {
+        this.activeProjectId = e.data.projectId;
+        this.renderProjectSelector();
+        this.loadData();
+      }
+
+      // Real-time project updates from portal
+      if (e.data.type === 'projects-registry') {
+        this.projects = e.data.projects || [];
+        this.renderProjectSelector();
+      }
+
+      // Legacy sso-user support
+      if (e.data.type === 'sso-user') {
         this.ssoUser = e.data.user;
         const av = document.getElementById('user-avatar');
         if (av && this.ssoUser) av.textContent = (this.ssoUser.name || 'U')[0].toUpperCase();
@@ -878,21 +1319,147 @@ const app = {
     // Theme sync handled by BSI Theme Bridge v1.1 in <head>
   },
 
+  // ─── Project management ─────────────────────────────────
+  renderProjectSelector() {
+    const container = document.getElementById('project-selector');
+    const sep = document.getElementById('project-sep');
+    const dropdown = document.getElementById('project-dropdown');
+    if (!container || !dropdown) return;
+
+    if (this.projects.length === 0) {
+      container.classList.remove('show');
+      if (sep) sep.style.display = 'none';
+      return;
+    }
+
+    container.classList.add('show');
+    if (sep) sep.style.display = '';
+
+    // Rebuild options
+    dropdown.innerHTML = '<option value="">-- Select project --</option>';
+    this.projects.forEach(p => {
+      const opt = document.createElement('option');
+      opt.value = p.id;
+      opt.textContent = p.name || p.id;
+      if (p.id === this.activeProjectId) opt.selected = true;
+      dropdown.appendChild(opt);
+    });
+  },
+
+  switchProject(projectId) {
+    if (projectId === this.activeProjectId) return;
+
+    // Save current boards to the old project before switching
+    if (db && this.currentUser && this.activeProjectId) {
+      this._saveDirty = true;
+      this._flushSave();
+    }
+
+    const oldProjectId = this.activeProjectId;
+    this.activeProjectId = projectId || null;
+
+    if (!projectId) {
+      // Deselected project — revert to localStorage
+      if (this._firestoreUnsubscribe) {
+        this._firestoreUnsubscribe();
+        this._firestoreUnsubscribe = null;
+      }
+      this.boards = [];
+      this.elements = [];
+      this._loadFromLocalStorage();
+      if (this.boards.length > 0 && this.activeBoardId) {
+        this.switchBoard(this.activeBoardId);
+      }
+      this.toast('Switched to local storage');
+      return;
+    }
+
+    // Load from new project's Firestore path
+    if (db && this.currentUser) {
+      this.loadFromFirestore(projectId);
+      this.toast(`Project: ${this.projects.find(p => p.id === projectId)?.name || projectId}`);
+    }
+  },
+
   // ─── Data persistence ────────────────────────────────────
   storageKey(k) { return (this.isDemo ? 'demo_db_forgeboard_' : 'forgeboard_') + k; },
 
-  loadData() {
+  _loadFromLocalStorage() {
     try {
       const raw = localStorage.getItem(this.storageKey('boards'));
       if (raw) {
         const d = JSON.parse(raw);
         this.boards = d.boards || [];
         this.activeBoardId = d.activeBoardId || (this.boards[0] && this.boards[0].id);
+        return true;
       }
-    } catch(e) { console.warn('Failed to load data', e); }
+    } catch(e) { console.warn('Failed to load from localStorage', e); }
+    return false;
+  },
+
+  loadData() {
+    // When logged in with an active project, try Firestore first
+    if (db && this.currentUser && this.activeProjectId) {
+      this.loadFromFirestore(this.activeProjectId);
+    } else {
+      this._loadFromLocalStorage();
+    }
+  },
+
+  loadFromFirestore(projectId) {
+    // Unsubscribe previous listener if any
+    if (this._firestoreUnsubscribe) {
+      this._firestoreUnsubscribe();
+      this._firestoreUnsubscribe = null;
+    }
+    const docRef = db.collection('projects').doc(projectId)
+      .collection('forgeboard').doc('state');
+
+    // Initial load
+    docRef.get().then(snap => {
+      if (snap.exists) {
+        const d = snap.data();
+        this.boards = d.boards || [];
+        this.activeBoardId = d.activeBoardId || (this.boards[0] && this.boards[0].id);
+        console.log('[ForgeBoard] Loaded from Firestore:', this.boards.length, 'boards');
+      } else {
+        // Firestore has no data, fall back to localStorage
+        this._loadFromLocalStorage();
+        console.log('[ForgeBoard] No Firestore data, loaded from localStorage');
+      }
+      if (this.boards.length > 0 && this.activeBoardId) {
+        this.switchBoard(this.activeBoardId);
+      }
+    }).catch(err => {
+      console.warn('[ForgeBoard] Firestore load failed, using localStorage', err);
+      this._loadFromLocalStorage();
+    });
+
+    // Listen for real-time updates
+    this._firestoreUnsubscribe = docRef.onSnapshot(snap => {
+      if (!snap.exists) return;
+      const d = snap.data();
+      // Only apply if different from current state (avoid loop)
+      const remoteUpdatedAt = d.updatedAt || 0;
+      if (remoteUpdatedAt > (this._lastFirestoreUpdate || 0)) {
+        this._lastFirestoreUpdate = remoteUpdatedAt;
+        this.boards = d.boards || [];
+        this.activeBoardId = d.activeBoardId || (this.boards[0] && this.boards[0].id);
+        const b = this.getActiveBoard();
+        if (b) {
+          this.elements = JSON.parse(JSON.stringify(b.elements || []));
+          this.viewport = { ...b.viewport };
+          document.getElementById('board-name').textContent = b.name;
+          this.render();
+        }
+      }
+    }, err => {
+      console.warn('[ForgeBoard] onSnapshot error', err);
+    });
   },
 
   _saveDirty: false,
+  _firestoreSaveTimer: null,
 
   saveData() {
     this._saveDirty = true;
@@ -909,12 +1476,30 @@ const app = {
       b.viewport = { ...this.viewport };
       b.modified = new Date().toISOString();
     }
+    // Always save to localStorage as backup
     try {
       localStorage.setItem(this.storageKey('boards'), JSON.stringify({
         boards: this.boards,
         activeBoardId: this.activeBoardId
       }));
     } catch(e) { console.warn('Save failed', e); }
+
+    // Also save to Firestore when logged in with an active project
+    if (db && this.currentUser && this.activeProjectId) {
+      clearTimeout(this._firestoreSaveTimer);
+      this._firestoreSaveTimer = setTimeout(() => {
+        const data = {
+          boards: JSON.parse(JSON.stringify(this.boards)),
+          activeBoardId: this.activeBoardId,
+          updatedAt: Date.now(),
+        };
+        db.collection('projects').doc(this.activeProjectId)
+          .collection('forgeboard').doc('state')
+          .set(data, { merge: false })
+          .then(() => console.log('[ForgeBoard] Saved to Firestore'))
+          .catch(err => console.warn('[ForgeBoard] Firestore save failed', err));
+      }, 500);
+    }
   },
 
   _startAutoSave() {
@@ -3976,6 +4561,85 @@ const app = {
   },
 
   // ─── Demo mode ───────────────────────────────────────────
+  setupDemoProject() {
+    // Set up demo user and project for demo mode
+    this.currentUser = {
+      uid: 'demo-user-001',
+      email: 'demo@blacksphereindustries.nl',
+      name: 'Demo User',
+      role: 'admin',
+    };
+    // Initialize Firebase (will use the DemoFirestore shim)
+    if (typeof firebase !== 'undefined' && !_firebaseInitialized) {
+      initFirebaseIfNeeded({ apiKey: 'demo', projectId: 'demo' });
+    }
+    // Read projects from registry (seeded by ERP), fallback to default
+    const regRaw = localStorage.getItem('demo_db_projects');
+    if (regRaw) {
+      const reg = JSON.parse(regRaw);
+      this.projects = Object.keys(reg).map(k => ({ id: reg[k].id || k, name: reg[k].name }));
+    }
+    if (!this.projects || !this.projects.length) {
+      this.projects = [{ id: 'demo_proj_001', name: 'CNC Milling Machine Retrofit' }];
+    }
+    this.activeProjectId = this.projects[0].id;
+    this.renderProjectSelector();
+    // Seed Firestore with demo board data if empty
+    this.seedDemoFirestore();
+  },
+
+  seedDemoFirestore() {
+    if (!db || !this.activeProjectId) return;
+    const docRef = db.collection('projects').doc(this.activeProjectId)
+      .collection('forgeboard').doc('state');
+    docRef.get().then(snap => {
+      if (snap.exists) return; // Already seeded
+      // Build a "System Architecture" demo board
+      const elements = [];
+      // Title block
+      elements.push({ id: 'seed-title', type: 'rectangle', x: 250, y: 40, width: 340, height: 70, fill: '#1e3a5f', stroke: '#3b82f6', strokeWidth: 3, text: 'System Architecture\nOverview', fontSize: 16, textAlign: 'center', opacity: 1, locked: false });
+      // Architecture boxes
+      const boxes = [
+        { name: 'Frontend\n(React)', x: 60, y: 180, color: '#22c55e', bg: '#1a332a' },
+        { name: 'API Gateway\n(REST/gRPC)', x: 280, y: 180, color: '#f59e0b', bg: '#92400e' },
+        { name: 'Backend\nServices', x: 500, y: 180, color: '#3b82f6', bg: '#1e3a5f' },
+        { name: 'Database\n(Firestore)', x: 170, y: 340, color: '#8b5cf6', bg: '#2d1b4e' },
+        { name: 'Auth\nService', x: 390, y: 340, color: '#ef4444', bg: '#3b1a1a' },
+      ];
+      boxes.forEach((b, i) => {
+        elements.push({ id: `seed-box-${i}`, type: 'rectangle', x: b.x, y: b.y, width: 160, height: 70, fill: b.bg, stroke: b.color, strokeWidth: 2, text: b.name, fontSize: 12, textAlign: 'center', opacity: 1, locked: false });
+      });
+      // Connectors
+      elements.push({ id: 'seed-conn-0', type: 'arrow', x: 140, y: 250, x2: 360, y2: 180, stroke: '#71717a', strokeWidth: 1.5, opacity: 0.6, locked: false, text: '' });
+      elements.push({ id: 'seed-conn-1', type: 'arrow', x: 360, y: 250, x2: 580, y2: 180, stroke: '#71717a', strokeWidth: 1.5, opacity: 0.6, locked: false, text: '' });
+      elements.push({ id: 'seed-conn-2', type: 'arrow', x: 580, y: 250, x2: 250, y2: 340, stroke: '#71717a', strokeWidth: 1.5, opacity: 0.6, locked: false, text: '' });
+      elements.push({ id: 'seed-conn-3', type: 'arrow', x: 580, y: 250, x2: 470, y2: 340, stroke: '#71717a', strokeWidth: 1.5, opacity: 0.6, locked: false, text: '' });
+      // Sticky notes
+      elements.push({ id: 'seed-note-1', type: 'sticky', x: 600, y: 340, width: 160, height: 70, fill: '#fbbf24', stroke: 'transparent', strokeWidth: 0, text: 'TODO: Add caching\nlayer for API', fontSize: 11, textAlign: 'center', opacity: 1, locked: false });
+      elements.push({ id: 'seed-note-2', type: 'sticky', x: 60, y: 340, width: 100, height: 60, fill: '#f87171', stroke: 'transparent', strokeWidth: 0, text: 'Latency\n< 50ms', fontSize: 11, textAlign: 'center', opacity: 1, locked: false });
+
+      const boardId = uid();
+      const board = {
+        id: boardId,
+        name: 'System Architecture',
+        created: new Date().toISOString(),
+        modified: new Date().toISOString(),
+        elements: elements,
+        viewport: { x: 0, y: 0, zoom: 1 },
+      };
+      const data = {
+        boards: [board],
+        activeBoardId: boardId,
+        updatedAt: Date.now(),
+      };
+      docRef.set(data).then(() => {
+        console.log('[ForgeBoard] Demo Firestore seeded');
+      }).catch(err => {
+        console.warn('[ForgeBoard] Demo seed failed', err);
+      });
+    });
+  },
+
   loadDemoData() {
     // Board 1: Interceptor Drone — System Architecture
     const b1Elements = [];
