@@ -1398,12 +1398,32 @@ const app = {
   },
 
   loadData() {
-    // When logged in with an active project, try Firestore first
+    // When logged in with an active project, try Firestore (project-scoped)
     if (db && this.currentUser && this.activeProjectId) {
       this.loadFromFirestore(this.activeProjectId);
+    } else if (db && this.currentUser && !this.activeProjectId) {
+      // Logged in but no project — use personal Firestore path
+      this._loadPersonalFromFirestore();
     } else {
       this._loadFromLocalStorage();
     }
+  },
+
+  _loadPersonalFromFirestore() {
+    if (!db || !this.currentUser) { this._loadFromLocalStorage(); return; }
+    const docRef = db.collection('users').doc(this.currentUser.uid)
+      .collection('app_data').doc('forgeboard_state');
+    docRef.get().then(snap => {
+      if (snap.exists) {
+        const d = snap.data();
+        this.boards = d.boards || [];
+        this.activeBoardId = d.activeBoardId || (this.boards[0] && this.boards[0].id);
+        console.log('[ForgeBoard] Loaded personal boards from Firestore');
+      } else {
+        this._loadFromLocalStorage();
+      }
+      if (this.boards.length > 0 && this.activeBoardId) this.switchBoard(this.activeBoardId);
+    }).catch(() => this._loadFromLocalStorage());
   },
 
   loadFromFirestore(projectId) {
@@ -1484,8 +1504,8 @@ const app = {
       }));
     } catch(e) { console.warn('Save failed', e); }
 
-    // Also save to Firestore when logged in with an active project
-    if (db && this.currentUser && this.activeProjectId) {
+    // Save to Firestore (primary when logged in)
+    if (db && this.currentUser) {
       clearTimeout(this._firestoreSaveTimer);
       this._firestoreSaveTimer = setTimeout(() => {
         const data = {
@@ -1493,10 +1513,11 @@ const app = {
           activeBoardId: this.activeBoardId,
           updatedAt: Date.now(),
         };
-        db.collection('projects').doc(this.activeProjectId)
-          .collection('forgeboard').doc('state')
-          .set(data, { merge: false })
-          .then(() => console.log('[ForgeBoard] Saved to Firestore'))
+        const docRef = this.activeProjectId
+          ? db.collection('projects').doc(this.activeProjectId).collection('forgeboard').doc('state')
+          : db.collection('users').doc(this.currentUser.uid).collection('app_data').doc('forgeboard_state');
+        docRef.set(data, { merge: false })
+          .then(() => console.log('[ForgeBoard] Saved to Firestore' + (this.activeProjectId ? ' (project)' : ' (personal)')))
           .catch(err => console.warn('[ForgeBoard] Firestore save failed', err));
       }, 500);
     }
@@ -4712,7 +4733,8 @@ const app = {
   },
 
   resetDemo() {
-    localStorage.removeItem(this.storageKey('boards'));
+    // Clear all ForgeBoard demo keys (localStorage + DemoFirestore)
+    Object.keys(localStorage).forEach(k => { if (k.includes('forgeboard')) localStorage.removeItem(k); });
     this.boards = [];
     this.elements = [];
     this.loadDemoData();
