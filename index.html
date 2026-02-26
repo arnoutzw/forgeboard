@@ -829,7 +829,8 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent)}
       ref: makeDocRef(path + '/' + id),
       exists: data !== undefined && data !== null,
       data: function() { return data ? JSON.parse(JSON.stringify(data)) : undefined; },
-      get: function(field) { return data ? data[field] : undefined; }
+      get: function(field) { return data ? data[field] : undefined; },
+      metadata: { hasPendingWrites: false, fromCache: false }
     };
   }
 
@@ -1458,6 +1459,7 @@ const app = {
     // Listen for real-time updates
     this._firestoreUnsubscribe = docRef.onSnapshot(snap => {
       if (!snap.exists) return;
+      if (snap.metadata.hasPendingWrites) return; // Skip own writes
       const d = snap.data();
       // Only apply if different from current state (avoid loop)
       const remoteUpdatedAt = d.updatedAt || 0;
