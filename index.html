@@ -1275,6 +1275,46 @@ const app = {
     window.addEventListener('message', (e) => {
       if (!e.data) return;
 
+      // ── Demo seed data handler ──────────────────────────────
+      if (e.data.type === 'wipe-demo-data') {
+        const pid = e.data.projectId;
+        if (pid) {
+          this.boards = this.boards.filter(b => b.projectId !== pid);
+          if (this.boards.length === 0) {
+            this.boards.push(this.makeBoard('Board 1'));
+          }
+          this.activeBoardId = this.boards[0].id;
+          this.elements = JSON.parse(JSON.stringify(this.boards[0].elements || []));
+          this.viewport = { ...this.boards[0].viewport };
+          this.render();
+          this.saveData();
+          console.log('[forgeboard] Wiped demo data for project', pid);
+        }
+        return;
+      }
+
+      if (e.data.type === 'seed-demo-data' && e.data.payload) {
+        const pid = e.data.projectId;
+        const payload = e.data.payload;
+        if (payload.boards && Array.isArray(payload.boards)) {
+          const existingIds = new Set(this.boards.map(b => b.id));
+          payload.boards.forEach(board => {
+            if (!existingIds.has(board.id)) {
+              board.projectId = pid;
+              this.boards.push(board);
+              existingIds.add(board.id);
+            }
+          });
+          // Switch to first seeded board
+          if (payload.boards.length > 0) {
+            this.switchBoard(payload.boards[0].id);
+            this.fitToScreen();
+          }
+        }
+        console.log('[forgeboard] Seeded', (payload.boards || []).length, 'boards for project', pid);
+        return;
+      }
+
       // Portal SSO authentication
       if (e.data.type === 'admin-auth') {
         const { firebaseConfig, projects, sso } = e.data;
