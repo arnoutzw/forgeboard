@@ -7,6 +7,9 @@
 <meta name="description" content="Engineering-focused digital whiteboard with vector shapes, freehand drawing, smart connectors and cross-tool integration.">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%2318181b'/><path d='M8 24L16 8l8 16' stroke='%23f59e0b' stroke-width='2.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/><circle cx='16' cy='16' r='3' fill='%23f59e0b'/></svg>">
 <link rel="manifest" href="data:application/json;base64,eyJuYW1lIjoiRm9yZ2VCb2FyZCIsInNob3J0X25hbWUiOiJGb3JnZUJvYXJkIiwic3RhcnRfdXJsIjoiLi8iLCJkaXNwbGF5Ijoic3RhbmRhbG9uZSIsImJhY2tncm91bmRfY29sb3IiOiIjMDkwOTBiIiwidGhlbWVfY29sb3IiOiIjZjU5ZTBiIn0=">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/plotly.js-basic-dist-min@2.35.0/plotly-basic.min.js"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{--bg:#09090b;--bg2:#18181b;--bg3:#27272a;--bg4:#3f3f46;--fg:#fafafa;--fg2:#a1a1aa;--fg3:#71717a;--accent:#f59e0b;--accent2:#d97706;--blue:#3b82f6;--green:#22c55e;--red:#ef4444;--purple:#8b5cf6;--pink:#ec4899;--cyan:#06b6d4;--font:'JetBrains Mono','SF Mono','Fira Code','Cascadia Code',monospace;--radius:6px;--shadow:0 4px 24px rgba(0,0,0,.4)}
@@ -55,17 +58,26 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent)}
 .zoom-display{font-size:11px;color:var(--fg2);min-width:44px;text-align:center}
 .h-group{display:flex;align-items:center;gap:2px}
 
+/* Project selector */
+.project-selector{display:none;align-items:center;gap:6px;margin-left:4px}
+.project-selector.show{display:flex}
+.project-selector select{background:var(--bg3);color:var(--fg);border:1px solid var(--bg4);border-radius:var(--radius);padding:4px 8px;font-size:11px;font-family:var(--font);cursor:pointer;max-width:180px;outline:none}
+.project-selector select:focus{border-color:var(--accent)}
+.project-selector select option{background:var(--bg2);color:var(--fg)}
+.project-selector-label{font-size:10px;color:var(--fg3);text-transform:uppercase;letter-spacing:.5px}
+
 /* Canvas */
 #svg-canvas{position:absolute;top:0;left:0;width:100%;height:100%;touch-action:none}
 #draw-canvas{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;touch-action:none}
-.grid-pattern{opacity:.15}
-[data-theme="eink"] .grid-pattern{opacity:0}
+.grid-pattern{opacity:.4}
+[data-theme="eink"] .grid-pattern{opacity:.25}
 
 /* Selection */
 .selection-box{fill:rgba(245,158,11,.08);stroke:var(--accent);stroke-width:1;stroke-dasharray:4 4}
 .element-handle{fill:var(--bg);stroke:var(--accent);stroke-width:1.5;cursor:pointer}
-.connector-port{fill:var(--accent);stroke:var(--bg);stroke-width:2;opacity:0;transition:opacity .15s;cursor:crosshair}
+.connector-port{fill:var(--accent);stroke:var(--bg);stroke-width:2;opacity:.35;transition:opacity .15s;cursor:crosshair}
 .connector-port:hover{opacity:1 !important}
+.connector-port.snap-active{opacity:1;r:7}
 
 /* Minimap */
 #minimap{position:absolute;bottom:12px;right:12px;width:160px;height:100px;background:var(--bg2);border:1px solid var(--bg3);border-radius:var(--radius);overflow:hidden;z-index:10;opacity:.85}
@@ -91,6 +103,60 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent)}
 .modal input,.modal select,.modal textarea{width:100%}
 .modal textarea{resize:vertical;min-height:60px}
 .modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:20px}
+/* Chart modal */
+.chart-modal{max-width:960px;min-width:700px}
+.chart-layout{display:flex;gap:16px}
+.chart-editor-pane{flex:3;display:flex;flex-direction:column;min-width:0}
+.chart-preview-pane{flex:2;display:flex;flex-direction:column;min-width:0}
+.chart-tabs{display:flex;gap:4px;margin-bottom:8px}
+.chart-tab{padding:4px 12px;border-radius:var(--radius);font-size:11px;font-weight:600;background:transparent;color:var(--fg2);border:1px solid var(--bg3);cursor:pointer}
+.chart-tab.active{background:var(--accent);color:var(--bg);border-color:var(--accent)}
+.chart-table-wrap{overflow:auto;max-height:320px;border:1px solid var(--bg3);border-radius:var(--radius)}
+.chart-table{border-collapse:collapse;width:100%;font-size:12px}
+.chart-table th,.chart-table td{border:1px solid var(--bg3);padding:3px 6px;min-width:70px;color:var(--fg);background:var(--bg)}
+.chart-table th{background:var(--bg2);font-weight:600;font-size:11px;color:var(--fg2);position:sticky;top:0;z-index:1}
+.chart-table td[contenteditable]{outline:none;cursor:text}
+.chart-table td[contenteditable]:focus{background:var(--bg2);box-shadow:inset 0 0 0 1px var(--accent)}
+.chart-table-actions{display:flex;gap:4px;margin-top:6px;flex-wrap:wrap}
+.chart-table-actions button{padding:3px 10px;border-radius:var(--radius);font-size:11px;font-weight:600;background:var(--bg3);color:var(--fg2);border:none;cursor:pointer}
+.chart-table-actions button:hover{background:var(--bg4);color:var(--fg)}
+.chart-csv-tab textarea{font-family:var(--font);font-size:11px;background:var(--bg);color:var(--fg);border:1px solid var(--bg3);border-radius:var(--radius);padding:8px;resize:vertical;min-height:200px}
+.chart-csv-actions{display:flex;gap:4px;margin-top:6px}
+.chart-csv-actions button{padding:3px 10px;border-radius:var(--radius);font-size:11px;font-weight:600;background:var(--bg3);color:var(--fg2);border:none;cursor:pointer}
+.chart-csv-actions button:hover{background:var(--bg4);color:var(--fg)}
+/* Table modal */
+.table-modal{max-width:960px;min-width:700px}
+.table-layout{display:flex;gap:16px}
+.table-editor-pane{flex:3;display:flex;flex-direction:column;min-width:0}
+.table-preview-pane{flex:2;display:flex;flex-direction:column;min-width:0}
+.table-tabs{display:flex;gap:4px;margin-bottom:8px}
+.table-tab{padding:4px 12px;border-radius:var(--radius);font-size:11px;font-weight:600;background:transparent;color:var(--fg2);border:1px solid var(--bg3);cursor:pointer}
+.table-tab.active{background:var(--accent);color:var(--bg);border-color:var(--accent)}
+.table-style-row{display:flex;gap:8px;margin-bottom:8px;align-items:center;flex-wrap:wrap}
+.table-style-row label{font-size:12px;color:var(--fg2);margin:0;white-space:nowrap}
+.table-style-row select{flex:1}
+.table-preview-wrap{flex:1;overflow:auto;border:1px solid var(--bg3);border-radius:var(--radius);background:var(--bg);padding:12px}
+.table-preview-wrap table{border-collapse:collapse;width:100%;font-size:11px;color:var(--fg)}
+.table-preview-wrap th{background:var(--accent);color:var(--bg);padding:6px 10px;text-align:left;font-weight:600;font-size:11px}
+.table-preview-wrap td{padding:5px 10px;border-bottom:1px solid var(--bg3)}
+.table-preview-wrap tr:nth-child(even) td{background:var(--bg2)}
+/* Math / LaTeX modal */
+.math-modal{max-width:860px;min-width:640px}
+.math-layout{display:flex;gap:16px}
+.math-editor-pane{flex:3;display:flex;flex-direction:column;min-width:0}
+.math-preview-pane{flex:2;display:flex;flex-direction:column;min-width:0}
+.math-editor-pane textarea{font-family:var(--font);font-size:13px;background:var(--bg);color:var(--fg);border:1px solid var(--bg3);border-radius:var(--radius);padding:10px;resize:vertical;min-height:100px;width:100%;line-height:1.6}
+.math-preview-box{flex:1;min-height:80px;padding:16px;display:flex;align-items:center;justify-content:center;background:var(--bg);border:1px solid var(--bg3);border-radius:var(--radius);overflow:auto}
+.math-preview-box .katex{font-size:1.6em}
+.math-preview-box .math-error{color:var(--red);font-size:11px;font-family:var(--font)}
+.math-cheatsheet{margin-top:12px;max-height:200px;overflow-y:auto;border:1px solid var(--bg3);border-radius:var(--radius);padding:0}
+.math-cheatsheet summary{font-size:11px;font-weight:600;color:var(--fg2);padding:8px 10px;cursor:pointer;user-select:none;background:var(--bg2);border-radius:var(--radius)}
+.math-cheatsheet[open] summary{border-radius:var(--radius) var(--radius) 0 0}
+.math-cheatsheet-grid{display:grid;grid-template-columns:1fr;gap:0;background:var(--bg)}
+.math-cheatsheet-grid .mc-item{display:flex;align-items:center;gap:10px;padding:5px 10px;background:var(--bg);font-size:11px;cursor:pointer;transition:background .1s;border-bottom:1px solid var(--bg3)}
+.math-cheatsheet-grid .mc-item:hover{background:var(--bg2)}
+.math-cheatsheet-grid .mc-item code{font-family:var(--font);color:var(--fg2);font-size:10px;flex:1;min-width:0;max-width:55%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.math-cheatsheet-grid .mc-item .mc-render{flex-shrink:0;min-width:80px;text-align:right}
 .btn{padding:8px 16px;border-radius:var(--radius);font-size:12px;font-weight:600;transition:all .15s}
 .btn-primary{background:var(--accent);color:var(--bg)}
 .btn-primary:hover{background:var(--accent2)}
@@ -109,8 +175,8 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent)}
 .color-swatch:hover,.color-swatch.active{border-color:var(--fg)}
 
 /* Pen options panel */
-#pen-panel{display:none;position:absolute;left:68px;top:0;width:220px;height:100%;background:var(--bg2);border-right:1px solid var(--bg3);z-index:17;box-shadow:var(--shadow);overflow-y:auto;flex-direction:column}
-#pen-panel.show{display:flex}
+#pen-panel,#shape-panel{display:none;position:absolute;left:68px;top:0;width:220px;height:100%;background:var(--bg2);border-right:1px solid var(--bg3);z-index:17;box-shadow:var(--shadow);overflow-y:auto;flex-direction:column;transition:left .2s}
+#pen-panel.show,#shape-panel.show{display:flex}
 .pp-section{padding:10px 14px;border-bottom:1px solid var(--bg3)}
 .pp-section:last-child{border-bottom:none}
 .pp-label{font-size:11px;color:var(--fg3);margin-bottom:6px;display:block;font-weight:500}
@@ -130,6 +196,13 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent)}
 .pp-toggle{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--fg2);cursor:pointer;margin-top:4px}
 .pp-toggle:first-child{margin-top:0}
 .pp-toggle input{accent-color:var(--accent)}
+.pp-dash-options{display:flex;gap:4px}
+.pp-dash-btn{flex:1;height:28px;border-radius:6px;border:1px solid var(--bg3);background:transparent;cursor:pointer;padding:4px 6px;display:flex;align-items:center;justify-content:center;transition:all .15s}
+.pp-dash-btn:hover{background:var(--bg3)}
+.pp-dash-btn.active{background:var(--accent);border-color:var(--accent)}
+.pp-dash-btn svg{width:100%;height:4px}
+.pp-dash-btn line{stroke:var(--fg2);stroke-width:2}
+.pp-dash-btn.active line{stroke:var(--bg)}
 #eraser-cursor{position:fixed;pointer-events:none;border:2px solid var(--fg2);border-radius:50%;z-index:30;display:none;transform:translate(-50%,-50%)}
 
 /* Properties bar (bottom) */
@@ -181,7 +254,9 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent)}
 .lp-icon svg{width:14px;height:14px}
 
 /* Symbol library panel */
-#symbol-panel{display:none;position:absolute;left:68px;top:0;width:280px;min-width:180px;max-width:50vw;height:100%;background:var(--bg2);border-right:1px solid var(--bg3);z-index:18;box-shadow:var(--shadow);overflow:hidden;flex-direction:column}
+#symbol-panel{display:none;position:absolute;left:68px;top:0;width:340px;min-width:220px;max-width:50vw;height:100%;background:var(--bg2);border-right:1px solid var(--bg3);z-index:18;box-shadow:var(--shadow);overflow:hidden;flex-direction:column;transition:left .2s}
+#sidebar.expanded ~ #pen-panel,#sidebar.expanded ~ #shape-panel{left:252px}
+#sidebar.expanded ~ #symbol-panel{left:252px}
 .panel-resize-handle{position:absolute;right:0;top:0;width:5px;height:100%;cursor:col-resize;z-index:19;background:transparent;transition:background .15s}.panel-resize-handle:hover,.panel-resize-handle.active{background:var(--accent)}
 #symbol-panel.show{display:flex}
 .sp-header{padding:12px;border-bottom:1px solid var(--bg3)}
@@ -191,11 +266,11 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent)}
 .sp-tab{padding:4px 10px;border-radius:4px;font-size:11px;color:var(--fg2);white-space:nowrap;cursor:pointer}
 .sp-tab:hover{background:var(--bg3)}
 .sp-tab.active{background:var(--accent);color:var(--bg)}
-.sp-grid{flex:1;overflow-y:auto;padding:8px;display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
-.sp-item{display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px 4px;border-radius:var(--radius);cursor:grab;border:1px solid transparent;transition:all .15s}
+.sp-grid{flex:1;overflow-y:auto;padding:6px;display:grid;grid-template-columns:repeat(4,1fr);gap:4px}
+.sp-item{display:flex;flex-direction:column;align-items:center;gap:2px;padding:4px 4px;border-radius:var(--radius);cursor:grab;border:1px solid transparent;transition:all .15s}
 .sp-item:hover{background:var(--bg3);border-color:var(--bg4)}
-.sp-item svg{width:40px;height:40px}
-.sp-item span{font-size:9px;color:var(--fg3);text-align:center;line-height:1.2;max-height:22px;overflow:hidden}
+.sp-item svg{width:32px;height:32px}
+.sp-item span{font-size:8px;color:var(--fg3);text-align:center;line-height:1.2;max-height:18px;overflow:hidden}
 
 /* Lasso selection path */
 .lasso-path{fill:rgba(245,158,11,.05);stroke:var(--accent);stroke-width:1.5;stroke-dasharray:5 3;pointer-events:none}
@@ -309,6 +384,42 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent)}
     </div>
   </div>
 
+  <!-- Shape options panel -->
+  <div id="shape-panel">
+    <div class="pp-section">
+      <span class="pp-label">Fill</span>
+      <div class="pp-colors" id="sp-fill-grid"></div>
+    </div>
+    <div class="pp-section">
+      <span class="pp-label">Stroke</span>
+      <div class="pp-colors" id="sp-stroke-grid"></div>
+    </div>
+    <div class="pp-section">
+      <span class="pp-label">Stroke Width</span>
+      <div class="pp-slider-row">
+        <input type="range" id="sp-stroke-width" min="0" max="8" value="2" oninput="app.setShapeStrokeWidth(+this.value)">
+        <span class="pp-slider-val" id="sp-stroke-width-val">2px</span>
+      </div>
+    </div>
+    <div class="pp-section">
+      <span class="pp-label">Line Style</span>
+      <div class="pp-dash-options" id="sp-dash-options">
+        <button class="pp-dash-btn active" data-dash="" onclick="app.setShapeStrokeDash('')" title="Solid">
+          <svg viewBox="0 0 40 4"><line x1="0" y1="2" x2="40" y2="2"/></svg>
+        </button>
+        <button class="pp-dash-btn" data-dash="8 4" onclick="app.setShapeStrokeDash('8 4')" title="Dashed">
+          <svg viewBox="0 0 40 4"><line x1="0" y1="2" x2="40" y2="2" stroke-dasharray="8 4"/></svg>
+        </button>
+        <button class="pp-dash-btn" data-dash="3 3" onclick="app.setShapeStrokeDash('3 3')" title="Dotted">
+          <svg viewBox="0 0 40 4"><line x1="0" y1="2" x2="40" y2="2" stroke-dasharray="3 3"/></svg>
+        </button>
+        <button class="pp-dash-btn" data-dash="12 4 3 4" onclick="app.setShapeStrokeDash('12 4 3 4')" title="Dash-dot">
+          <svg viewBox="0 0 40 4"><line x1="0" y1="2" x2="40" y2="2" stroke-dasharray="12 4 3 4"/></svg>
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- Symbol library panel -->
   <div id="symbol-panel">
     <div class="sp-header"><h4>Engineering Symbols</h4><input class="sp-search" id="symbol-search" placeholder="Search symbols..." oninput="app.filterSymbols(this.value)"></div>
@@ -323,6 +434,13 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent)}
       <button class="h-btn" onclick="app.toggleSidebar()" title="Toggle sidebar">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
       </button>
+      <div class="project-selector" id="project-selector">
+        <span class="project-selector-label">Project</span>
+        <select id="project-dropdown" onchange="app.switchProject(this.value)">
+          <option value="">-- Select project --</option>
+        </select>
+      </div>
+      <div class="h-sep" id="project-sep" style="display:none"></div>
       <span class="h-title" id="board-name" onclick="app.renameBoard()">Untitled Board</span>
       <div class="h-group">
         <button class="h-btn" onclick="app.zoomIn()" title="Zoom in"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg></button>
@@ -342,6 +460,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent)}
         <button class="h-btn" onclick="app.exportPNG()" title="Export PNG"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg></button>
       </div>
       <div class="h-sep"></div>
+      <button class="h-btn" id="grid-btn" onclick="app.toggleGrid()" title="Toggle grid (G)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3h18v18H3z"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/></svg></button>
       <button class="h-btn" onclick="app.toggleLayers()" title="Layers" id="layers-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg></button>
       <button class="h-btn" data-theme-toggle onclick="app.toggleTheme()" title="Toggle theme" id="theme-btn">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3a7 7 0 0 0 9.79 9.79z"/></svg>
@@ -354,7 +473,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent)}
       <svg id="svg-canvas" xmlns="http://www.w3.org/2000/svg">
         <defs>
           <pattern id="grid-dots" width="20" height="20" patternUnits="userSpaceOnUse">
-            <circle cx="10" cy="10" r="0.8" fill="var(--fg3)" class="grid-pattern"/>
+            <circle cx="10" cy="10" r="1" fill="var(--fg3)" class="grid-pattern"/>
           </pattern>
           <marker id="arrow-end" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
             <path d="M0 0L10 4L0 8z" fill="var(--fg2)"/>
@@ -366,6 +485,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent)}
         <g id="canvas-grid"><rect width="99999" height="99999" x="-49999" y="-49999" fill="url(#grid-dots)"/></g>
         <g id="canvas-elements"></g>
         <g id="canvas-connectors"></g>
+        <g id="canvas-ports"></g>
         <g id="canvas-overlay"></g>
         <g id="canvas-selection"></g>
       </svg>
@@ -380,23 +500,28 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent)}
 
     <!-- Properties bar -->
     <div id="props-bar">
-      <div class="prop-group">
+      <div class="prop-group" id="pg-fill">
         <span class="prop-label">Fill</span>
         <input type="color" class="prop-color" id="prop-fill" value="#292524" onchange="app.setProp('fill',this.value)">
       </div>
-      <div class="prop-group">
+      <div class="prop-group" id="pg-stroke">
         <span class="prop-label">Stroke</span>
         <input type="color" class="prop-color" id="prop-stroke" value="#f59e0b" onchange="app.setProp('stroke',this.value)">
       </div>
-      <div class="prop-group">
+      <div class="prop-group" id="pg-stroke-width">
         <span class="prop-label">Width</span>
         <input type="number" class="prop-input" id="prop-stroke-width" value="2" min="0" max="20" onchange="app.setProp('strokeWidth',+this.value)">
       </div>
-      <div class="prop-group">
+      <div class="prop-group" id="pg-font-size">
         <span class="prop-label">Font</span>
         <input type="number" class="prop-input" id="prop-font-size" value="14" min="8" max="72" onchange="app.setProp('fontSize',+this.value)">
       </div>
-      <div class="prop-group">
+      <div class="prop-group" id="pg-icon-size">
+        <span class="prop-label">Icon</span>
+        <input type="range" style="width:80px" id="prop-icon-scale" min="0.5" max="2" step="0.1" value="1" oninput="app.setProp('iconScale',+this.value)">
+        <span class="prop-label" id="prop-icon-scale-val" style="min-width:28px">1×</span>
+      </div>
+      <div class="prop-group" id="pg-opacity">
         <span class="prop-label">Opacity</span>
         <input type="range" style="width:80px" id="prop-opacity" min="0" max="1" step="0.05" value="1" oninput="app.setProp('opacity',+this.value)">
       </div>
@@ -457,12 +582,522 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent)}
   </div>
 </div>
 
+<!-- Rename board modal -->
+<div class="modal-overlay" id="modal-rename-board">
+  <div class="modal">
+    <h3>Rename Board</h3>
+    <label>Board Name</label>
+    <input id="rename-board-input" placeholder="Board name" onkeydown="if(event.key==='Enter'){app.saveRenameBoard();event.preventDefault()}">
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="app.closeModal('modal-rename-board')">Cancel</button>
+      <button class="btn btn-primary" onclick="app.saveRenameBoard()">Save</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-chart">
+  <div class="modal chart-modal">
+    <h3>Chart Editor</h3>
+    <div class="chart-layout">
+      <div class="chart-editor-pane">
+        <div class="chart-tabs">
+          <button class="chart-tab active" data-tab="data" onclick="app.chartSwitchTab('data')">Data</button>
+          <button class="chart-tab" data-tab="csv" onclick="app.chartSwitchTab('csv')">CSV</button>
+        </div>
+        <div class="chart-data-tab" id="chart-data-tab">
+          <div class="chart-table-wrap">
+            <table class="chart-table" id="chart-table"></table>
+          </div>
+          <div class="chart-table-actions">
+            <button onclick="app.chartAddRow()">+ Row</button>
+            <button onclick="app.chartRemoveRow()">− Row</button>
+            <button onclick="app.chartAddCol()">+ Col</button>
+            <button onclick="app.chartRemoveCol()">− Col</button>
+          </div>
+        </div>
+        <div class="chart-csv-tab" id="chart-csv-tab" style="display:none">
+          <textarea id="chart-csv" rows="12" placeholder="Paste CSV here..."></textarea>
+          <div class="chart-csv-actions">
+            <button onclick="app.chartImportCSV()">Import to Table</button>
+            <button onclick="app.chartExportCSV()">Export from Table</button>
+          </div>
+        </div>
+      </div>
+      <div class="chart-preview-pane">
+        <div style="display:flex;gap:8px;margin-bottom:8px;align-items:center">
+          <label style="font-size:12px;color:var(--fg2);margin:0">Type</label>
+          <select id="chart-type" onchange="app.chartUpdatePreview()" style="flex:1">
+            <option value="bar">Bar</option>
+            <option value="hbar">Horizontal Bar</option>
+            <option value="line">Line</option>
+            <option value="area">Area</option>
+            <option value="scatter">Scatter</option>
+            <option value="bubble">Bubble</option>
+            <option value="pie">Pie</option>
+            <option value="donut">Donut</option>
+            <option value="histogram">Histogram</option>
+            <option value="waterfall">Waterfall</option>
+          </select>
+        </div>
+        <div id="chart-preview" style="width:100%;height:300px;background:var(--bg);border-radius:var(--radius);border:1px solid var(--bg3)"></div>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="app.closeChartModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="app.saveChart()">Insert Chart</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-table">
+  <div class="modal table-modal">
+    <h3>Table Editor</h3>
+    <div class="table-layout">
+      <div class="table-editor-pane">
+        <div class="table-tabs">
+          <button class="table-tab active" data-tab="data" onclick="app.tableSwitchTab('data')">Data</button>
+          <button class="table-tab" data-tab="csv" onclick="app.tableSwitchTab('csv')">CSV</button>
+        </div>
+        <div class="table-data-tab" id="table-data-tab">
+          <div class="chart-table-wrap">
+            <table class="chart-table" id="tbl-table"></table>
+          </div>
+          <div class="chart-table-actions">
+            <button onclick="app.tableAddRow()">+ Row</button>
+            <button onclick="app.tableRemoveRow()">− Row</button>
+            <button onclick="app.tableAddCol()">+ Col</button>
+            <button onclick="app.tableRemoveCol()">− Col</button>
+          </div>
+        </div>
+        <div class="table-csv-tab" id="table-csv-tab" style="display:none">
+          <textarea id="tbl-csv" class="chart-csv-tab textarea" style="font-family:var(--font);font-size:11px;background:var(--bg);color:var(--fg);border:1px solid var(--bg3);border-radius:var(--radius);padding:8px;resize:vertical;min-height:200px;width:100%" rows="12" placeholder="Paste CSV here..."></textarea>
+          <div class="chart-csv-actions">
+            <button onclick="app.tableImportCSV()">Import to Table</button>
+            <button onclick="app.tableExportCSV()">Export from Table</button>
+          </div>
+        </div>
+      </div>
+      <div class="table-preview-pane">
+        <div class="table-style-row">
+          <label>Style</label>
+          <select id="tbl-style" onchange="app.tableUpdatePreview()">
+            <option value="striped">Striped</option>
+            <option value="bordered">Bordered</option>
+            <option value="minimal">Minimal</option>
+            <option value="dark-header">Dark Header</option>
+          </select>
+        </div>
+        <div class="table-preview-wrap" id="tbl-preview"></div>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="app.closeTableModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="app.saveTable()">Insert Table</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-math">
+  <div class="modal math-modal">
+    <h3>LaTeX Equation Editor</h3>
+    <div class="math-layout">
+      <div class="math-editor-pane">
+        <label style="margin-top:0">LaTeX Source</label>
+        <textarea id="math-input" rows="4" placeholder="Enter LaTeX equation..." oninput="app.mathUpdatePreview()">E = mc^2</textarea>
+        <details class="math-cheatsheet">
+          <summary>LaTeX Cheat Sheet</summary>
+          <div class="math-cheatsheet-grid" id="math-cheatsheet-grid"></div>
+        </details>
+      </div>
+      <div class="math-preview-pane">
+        <label style="margin-top:0">Preview</label>
+        <div class="math-preview-box" id="math-preview"></div>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="app.closeMathModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="app.saveMath()">Insert Equation</button>
+    </div>
+  </div>
+</div>
+
 <!-- Toast container -->
 <div class="toast-container" id="toasts"></div>
 <div id="eraser-cursor"></div>
 
 <!-- Hidden file input -->
 <input type="file" id="file-input" accept=".json" style="display:none" onchange="app.handleImport(event)">
+
+<!-- Firebase SDK (compat) -->
+<script src="https://www.gstatic.com/firebasejs/10.14.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.0/firebase-auth-compat.js"></script>
+
+<!-- DemoFirestore shim — intercepts Firebase calls in demo mode -->
+<script>
+(function() {
+  // Check if demo mode is active
+  var params = new URLSearchParams(window.location.search);
+  var isDemoFromURL = params.has('demo') || params.get('demo') === 'true' || params.get('mode') === 'demo';
+  var isDemoFromLS = localStorage.getItem('app_demo_mode') === 'true';
+  window.DEMO_MODE = isDemoFromURL || isDemoFromLS;
+
+  if (isDemoFromURL && !isDemoFromLS) {
+    localStorage.setItem('app_demo_mode', 'true');
+  }
+
+  if (!window.DEMO_MODE) return;
+
+  console.log('[Demo Mode] Active - using local database');
+
+  // ===== Local Storage Database =====
+  var DB_PREFIX = 'demo_db_';
+
+  function getStore(path) {
+    var key = DB_PREFIX + path;
+    try { return JSON.parse(localStorage.getItem(key)) || {}; }
+    catch(e) { return {}; }
+  }
+
+  function setStore(path, data) {
+    localStorage.setItem(DB_PREFIX + path, JSON.stringify(data));
+    notifyListeners(path);
+  }
+
+  function genId() {
+    return 'demo_' + Date.now().toString(36) + '_' + Math.random().toString(36).substr(2, 9);
+  }
+
+  // ===== Snapshot Listeners =====
+  var listeners = {};
+
+  function addListener(path, cb) {
+    if (!listeners[path]) listeners[path] = [];
+    listeners[path].push(cb);
+    return function() {
+      listeners[path] = (listeners[path] || []).filter(function(fn) { return fn !== cb; });
+    };
+  }
+
+  function notifyListeners(path) {
+    // Notify exact path listeners
+    (listeners[path] || []).forEach(function(cb) {
+      try { cb(); } catch(e) { console.warn('[Demo] listener error:', e); }
+    });
+    // Notify parent collection listeners
+    var parts = path.split('/');
+    for (var i = parts.length - 1; i > 0; i--) {
+      var parent = parts.slice(0, i).join('/');
+      (listeners[parent] || []).forEach(function(cb) {
+        try { cb(); } catch(e) {}
+      });
+    }
+  }
+
+  // ===== Query Implementation =====
+  function applyWhere(docs, field, op, value) {
+    return docs.filter(function(d) {
+      var v = field.split('.').reduce(function(o, k) { return o && o[k]; }, d.data);
+      switch(op) {
+        case '==': return v === value;
+        case '!=': return v !== value;
+        case '<': return v < value;
+        case '<=': return v <= value;
+        case '>': return v > value;
+        case '>=': return v >= value;
+        case 'in': return Array.isArray(value) && value.indexOf(v) >= 0;
+        case 'array-contains': return Array.isArray(v) && v.indexOf(value) >= 0;
+        default: return true;
+      }
+    });
+  }
+
+  function applyOrderBy(docs, field, dir) {
+    return docs.slice().sort(function(a, b) {
+      var va = field.split('.').reduce(function(o, k) { return o && o[k]; }, a.data);
+      var vb = field.split('.').reduce(function(o, k) { return o && o[k]; }, b.data);
+      if (va < vb) return dir === 'desc' ? 1 : -1;
+      if (va > vb) return dir === 'desc' ? -1 : 1;
+      return 0;
+    });
+  }
+
+  // ===== Document Snapshot =====
+  function makeDocSnap(id, data, path) {
+    return {
+      id: id,
+      ref: makeDocRef(path + '/' + id),
+      exists: data !== undefined && data !== null,
+      data: function() { return data ? JSON.parse(JSON.stringify(data)) : undefined; },
+      get: function(field) { return data ? data[field] : undefined; }
+    };
+  }
+
+  // ===== Query Snapshot =====
+  function makeQuerySnap(docs) {
+    return {
+      docs: docs,
+      empty: docs.length === 0,
+      size: docs.length,
+      forEach: function(cb) { docs.forEach(cb); }
+    };
+  }
+
+  // ===== Document Reference =====
+  function makeDocRef(path) {
+    var parts = path.split('/');
+    var docId = parts[parts.length - 1];
+    var colPath = parts.slice(0, -1).join('/');
+
+    return {
+      id: docId,
+      path: path,
+      parent: { path: colPath },
+      collection: function(subCol) {
+        return makeCollRef(path + '/' + subCol);
+      },
+      get: function() {
+        var store = getStore(colPath);
+        var data = store[docId] || null;
+        return Promise.resolve(makeDocSnap(docId, data, colPath));
+      },
+      set: function(data, opts) {
+        var store = getStore(colPath);
+        if (opts && opts.merge && store[docId]) {
+          store[docId] = Object.assign({}, store[docId], data);
+        } else {
+          store[docId] = JSON.parse(JSON.stringify(data));
+        }
+        setStore(colPath, store);
+        return Promise.resolve();
+      },
+      update: function(data) {
+        var store = getStore(colPath);
+        if (!store[docId]) store[docId] = {};
+        Object.keys(data).forEach(function(k) { store[docId][k] = data[k]; });
+        setStore(colPath, store);
+        return Promise.resolve();
+      },
+      delete: function() {
+        var store = getStore(colPath);
+        delete store[docId];
+        setStore(colPath, store);
+        return Promise.resolve();
+      },
+      onSnapshot: function(cb, errCb) {
+        var handler = function() {
+          var store = getStore(colPath);
+          var data = store[docId] || null;
+          cb(makeDocSnap(docId, data, colPath));
+        };
+        handler(); // Initial call
+        return addListener(colPath, handler);
+      }
+    };
+  }
+
+  // ===== Collection Reference / Query =====
+  function makeCollRef(path) {
+    return makeQuery(path, []);
+  }
+
+  function makeQuery(path, filters) {
+    var q = {
+      path: path,
+      doc: function(id) {
+        if (!id) id = genId();
+        return makeDocRef(path + '/' + id);
+      },
+      add: function(data) {
+        var id = genId();
+        var store = getStore(path);
+        var docData = JSON.parse(JSON.stringify(data));
+        store[id] = docData;
+        setStore(path, store);
+        var ref = makeDocRef(path + '/' + id);
+        ref._id = id;
+        return Promise.resolve(ref);
+      },
+      where: function(field, op, value) {
+        var newFilters = filters.concat([{ type: 'where', field: field, op: op, value: value }]);
+        return makeQuery(path, newFilters);
+      },
+      orderBy: function(field, dir) {
+        var newFilters = filters.concat([{ type: 'orderBy', field: field, dir: dir || 'asc' }]);
+        return makeQuery(path, newFilters);
+      },
+      limit: function(n) {
+        var newFilters = filters.concat([{ type: 'limit', n: n }]);
+        return makeQuery(path, newFilters);
+      },
+      get: function() {
+        var store = getStore(path);
+        var docs = Object.keys(store).map(function(id) {
+          return { id: id, data: store[id] };
+        });
+        // Apply filters
+        filters.forEach(function(f) {
+          if (f.type === 'where') docs = applyWhere(docs, f.field, f.op, f.value);
+          if (f.type === 'orderBy') docs = applyOrderBy(docs, f.field, f.dir);
+          if (f.type === 'limit') docs = docs.slice(0, f.n);
+        });
+        var snaps = docs.map(function(d) { return makeDocSnap(d.id, d.data, path); });
+        return Promise.resolve(makeQuerySnap(snaps));
+      },
+      onSnapshot: function(cbOrOpts, cbOrErr, errCb) {
+        var cb = typeof cbOrOpts === 'function' ? cbOrOpts : cbOrErr;
+        var handler = function() {
+          var store = getStore(path);
+          var docs = Object.keys(store).map(function(id) {
+            return { id: id, data: store[id] };
+          });
+          filters.forEach(function(f) {
+            if (f.type === 'where') docs = applyWhere(docs, f.field, f.op, f.value);
+            if (f.type === 'orderBy') docs = applyOrderBy(docs, f.field, f.dir);
+            if (f.type === 'limit') docs = docs.slice(0, f.n);
+          });
+          var snaps = docs.map(function(d) { return makeDocSnap(d.id, d.data, path); });
+          cb(makeQuerySnap(snaps));
+        };
+        handler(); // Initial call
+        return addListener(path, handler);
+      }
+    };
+    return q;
+  }
+
+  // ===== Batch Writes =====
+  function makeBatch() {
+    var ops = [];
+    return {
+      set: function(ref, data, opts) { ops.push({ type: 'set', ref: ref, data: data, opts: opts }); },
+      update: function(ref, data) { ops.push({ type: 'update', ref: ref, data: data }); },
+      delete: function(ref) { ops.push({ type: 'delete', ref: ref }); },
+      commit: function() {
+        return Promise.all(ops.map(function(op) {
+          if (op.type === 'set') return op.ref.set(op.data, op.opts);
+          if (op.type === 'update') return op.ref.update(op.data);
+          if (op.type === 'delete') return op.ref.delete();
+        }));
+      }
+    };
+  }
+
+  // ===== Demo User =====
+  var DEMO_USER = {
+    uid: 'demo-user-001',
+    email: 'demo@blacksphereindustries.nl',
+    displayName: 'Demo User',
+    photoURL: null,
+    isAnonymous: false,
+    emailVerified: true,
+    getIdToken: function() { return Promise.resolve('demo-token'); },
+    reload: function() { return Promise.resolve(); }
+  };
+  window.DEMO_USER = DEMO_USER;
+
+  // ===== Override Firebase =====
+  // Wait for firebase to load, then override
+  var _origFirebase = null;
+
+  function overrideFirebase() {
+    if (typeof firebase === 'undefined') {
+      setTimeout(overrideFirebase, 50);
+      return;
+    }
+
+    _origFirebase = {
+      firestore: firebase.firestore,
+      auth: firebase.auth
+    };
+
+    // Override firestore()
+    var demoDb = {
+      collection: function(name) { return makeCollRef(name); },
+      doc: function(path) { return makeDocRef(path); },
+      batch: function() { return makeBatch(); },
+      runTransaction: function(fn) {
+        var t = {
+          get: function(ref) { return ref.get(); },
+          set: function(ref, data, opts) { return ref.set(data, opts); },
+          update: function(ref, data) { return ref.update(data); },
+          delete: function(ref) { return ref.delete(); }
+        };
+        return fn(t);
+      }
+    };
+
+    firebase.firestore = function() { return demoDb; };
+    firebase.firestore.FieldValue = {
+      serverTimestamp: function() { return new Date().toISOString(); },
+      arrayUnion: function() { return { _type: 'arrayUnion', values: Array.from(arguments) }; },
+      arrayRemove: function() { return { _type: 'arrayRemove', values: Array.from(arguments) }; },
+      increment: function(n) { return { _type: 'increment', value: n }; },
+      delete: function() { return { _type: 'delete' }; }
+    };
+    firebase.firestore.Timestamp = {
+      now: function() { return { toDate: function() { return new Date(); }, seconds: Math.floor(Date.now()/1000) }; },
+      fromDate: function(d) { return { toDate: function() { return d; }, seconds: Math.floor(d.getTime()/1000) }; }
+    };
+
+    // Override auth()
+    var authListeners = [];
+    var currentUser = DEMO_USER;
+
+    firebase.auth = function() {
+      return {
+        currentUser: currentUser,
+        onAuthStateChanged: function(cb) {
+          authListeners.push(cb);
+          setTimeout(function() { cb(currentUser); }, 10);
+          return function() { authListeners = authListeners.filter(function(fn) { return fn !== cb; }); };
+        },
+        signInWithPopup: function() { return Promise.resolve({ user: currentUser }); },
+        signInAnonymously: function() {
+          currentUser = Object.assign({}, DEMO_USER, { isAnonymous: true, displayName: 'Guest User' });
+          return Promise.resolve({ user: currentUser });
+        },
+        signInWithEmailAndPassword: function() { return Promise.resolve({ user: currentUser }); },
+        signOut: function() {
+          localStorage.removeItem('app_demo_mode');
+          window.location.search = '';
+          return Promise.resolve();
+        },
+        GoogleAuthProvider: function() { return {}; }
+      };
+    };
+    firebase.auth.GoogleAuthProvider = function() { return {}; };
+    firebase.auth.GoogleAuthProvider.PROVIDER_ID = 'google.com';
+
+    Object.defineProperty(firebase, 'apps', { get: function() { return [{ name: '[DEFAULT]', options: {} }]; }, configurable: true });
+    console.log('[Demo Mode] Firebase overridden with local database');
+  }
+
+  overrideFirebase();
+
+  // ===== Demo Mode Banner =====
+  window.addEventListener('DOMContentLoaded', function() {
+    var banner = document.createElement('div');
+    banner.id = 'demo-mode-banner';
+    banner.innerHTML = '<span style="margin-right:12px">\u26a1 Demo Mode</span><span style="opacity:0.7;margin-right:12px">Data is stored locally in your browser</span><button id="demo-exit-btn" style="background:rgba(255,255,255,0.2);border:1px solid rgba(255,255,255,0.3);color:inherit;padding:2px 12px;border-radius:4px;cursor:pointer;font-size:12px">Exit Demo</button><button id="demo-reset-btn" style="background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);color:inherit;padding:2px 12px;border-radius:4px;cursor:pointer;font-size:12px;margin-left:6px">Reset Data</button>';
+    banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:linear-gradient(90deg,#10069f,#1297e4);color:white;padding:6px 16px;font-size:13px;font-family:system-ui,sans-serif;display:flex;align-items:center;box-shadow:0 2px 8px rgba(0,0,0,0.2);';
+    document.body.appendChild(banner);
+    // Push page content down
+    document.body.style.paddingTop = (banner.offsetHeight) + 'px';
+
+    document.getElementById('demo-exit-btn').onclick = function() {
+      localStorage.removeItem('app_demo_mode');
+      // Clear demo data
+      Object.keys(localStorage).forEach(function(k) { if (k.startsWith('demo_db_')) localStorage.removeItem(k); });
+      window.location.href = window.location.pathname;
+    };
+    document.getElementById('demo-reset-btn').onclick = function() {
+      Object.keys(localStorage).forEach(function(k) { if (k.startsWith('demo_db_')) localStorage.removeItem(k); });
+      window.location.reload();
+    };
+  });
+})();
+</script>
 
 <script>
 /* =========================================================================
@@ -519,6 +1154,10 @@ const TOOLS = [
   { sep: true },
   { id: 'text', label: 'Text', key: 'T', icon: '<path d="M4 7V4h16v3"/><path d="M9 20h6"/><path d="M12 4v16"/>' },
   { id: 'sticky', label: 'Sticky', key: 'S', icon: '<path d="M16 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8z"/><path d="M15 3v6h6"/>' },
+  { id: 'image', label: 'Image', key: 'I', icon: '<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/>' },
+  { id: 'math', label: 'Math', key: 'M', icon: '<path d="M4 20h16"/><path d="M8 4l-4 8h8"/><path d="M14 4h6M17 4v8M14 8h6"/>' },
+  { id: 'chart', label: 'Chart', key: 'J', icon: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M7 17v-4"/><path d="M11 17v-8"/><path d="M15 17v-6"/>' },
+  { id: 'table', label: 'Table', key: 'B', icon: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M3 15h18"/><path d="M9 3v18"/>' },
   { sep: true },
   { id: 'eraser', label: 'Eraser', key: 'E', icon: '<path d="M7 21h10"/><path d="M5.5 13.5L12 7l5 5-6.5 6.5a2.12 2.12 0 0 1-3 0L5.5 16.5a2.12 2.12 0 0 1 0-3z"/>' },
   { sep: true },
@@ -529,6 +1168,18 @@ const TOOLS = [
 const STICKY_COLORS = ['#fbbf24','#34d399','#60a5fa','#f87171','#c084fc','#f472b6','#22d3ee'];
 const SHAPE_FILLS = ['#292524','#1e3a5f','#1a332a','#3b1a1a','#2d1b4e','transparent'];
 const STROKE_COLORS = ['#f59e0b','#3b82f6','#22c55e','#ef4444','#8b5cf6','#ec4899','#71717a','#ffffff'];
+
+// ─── Firebase Initialization ─────────────────────────────────────
+let _firebaseInitialized = false;
+let db = null;
+
+function initFirebaseIfNeeded(config) {
+  if (_firebaseInitialized || !config || !config.apiKey) return;
+  firebase.initializeApp(config);
+  db = firebase.firestore();
+  _firebaseInitialized = true;
+  console.log('[ForgeBoard] Firebase initialized');
+}
 
 // ─── Main Application ────────────────────────────────────────────
 const app = {
@@ -555,10 +1206,25 @@ const app = {
   penMode: 'pen',
   penSmoothing: true,
   eraserRadius: 20,
+  shapeFill: null,
+  shapeStroke: null,
+  shapeStrokeWidth: 2,
+  shapeStrokeDash: '',
+  _chartEditing: null,
+  _chartType: 'bar',
+  _chartData: [],
+  _tableEditing: null,
+  _tableData: [],
+  _tableStyle: 'striped',
+  _mathEditing: null,
   isDemo: false,
   sidebarExpanded: false,
   theme: 'dark',
   ssoUser: null,
+  currentUser: null,
+  projects: [],
+  activeProjectId: null,
+  _firestoreUnsubscribe: null,
 
   // ─── Init ────────────────────────────────────────────────
   init() {
@@ -569,9 +1235,11 @@ const app = {
       if (e.detail && e.detail.theme) { this.theme = e.detail.theme; this.render(); }
     });
     this.loadData();
+    this._startAutoSave();
     this.buildTools();
     this.buildTabletToolbar();
     this.buildPenPanel();
+    this.buildShapePanel();
     this.bindEvents();
     this.detectEink();
     this.initSymbolPanel();
@@ -580,6 +1248,7 @@ const app = {
     this.render();
     if (this.isDemo) {
       document.getElementById('demo-banner').classList.add('show');
+      this.setupDemoProject();
       if (this.boards.length === 0) this.loadDemoData();
     }
     if (this.boards.length === 0) {
@@ -603,7 +1272,45 @@ const app = {
 
   setupSSO() {
     window.addEventListener('message', (e) => {
-      if (e.data && e.data.type === 'sso-user') {
+      if (!e.data) return;
+
+      // Portal SSO authentication
+      if (e.data.type === 'admin-auth') {
+        const { firebaseConfig, projects, sso } = e.data;
+        initFirebaseIfNeeded(firebaseConfig);
+        if (sso) {
+          this.currentUser = {
+            uid: sso.uid || sso.id,
+            email: sso.email,
+            name: sso.name || sso.displayName || sso.email,
+            role: sso.role || 'viewer',
+          };
+          this.ssoUser = this.currentUser;
+          const av = document.getElementById('user-avatar');
+          if (av) av.textContent = (this.currentUser.name || 'U')[0].toUpperCase();
+        }
+        if (Array.isArray(projects)) {
+          this.projects = projects;
+          this.renderProjectSelector();
+        }
+        console.log('[ForgeBoard] admin-auth received', { user: this.currentUser?.email, projects: this.projects.length });
+      }
+
+      // Portal selected a project
+      if (e.data.type === 'active-project' && e.data.projectId) {
+        this.activeProjectId = e.data.projectId;
+        this.renderProjectSelector();
+        this.loadData();
+      }
+
+      // Real-time project updates from portal
+      if (e.data.type === 'projects-registry') {
+        this.projects = e.data.projects || [];
+        this.renderProjectSelector();
+      }
+
+      // Legacy sso-user support
+      if (e.data.type === 'sso-user') {
         this.ssoUser = e.data.user;
         const av = document.getElementById('user-avatar');
         if (av && this.ssoUser) av.textContent = (this.ssoUser.name || 'U')[0].toUpperCase();
@@ -612,37 +1319,224 @@ const app = {
     // Theme sync handled by BSI Theme Bridge v1.1 in <head>
   },
 
+  // ─── Project management ─────────────────────────────────
+  renderProjectSelector() {
+    const container = document.getElementById('project-selector');
+    const sep = document.getElementById('project-sep');
+    const dropdown = document.getElementById('project-dropdown');
+    if (!container || !dropdown) return;
+
+    if (this.projects.length === 0) {
+      container.classList.remove('show');
+      if (sep) sep.style.display = 'none';
+      return;
+    }
+
+    container.classList.add('show');
+    if (sep) sep.style.display = '';
+
+    // Rebuild options
+    dropdown.innerHTML = '<option value="">-- Select project --</option>';
+    this.projects.forEach(p => {
+      const opt = document.createElement('option');
+      opt.value = p.id;
+      opt.textContent = p.name || p.id;
+      if (p.id === this.activeProjectId) opt.selected = true;
+      dropdown.appendChild(opt);
+    });
+  },
+
+  switchProject(projectId) {
+    if (projectId === this.activeProjectId) return;
+
+    // Save current boards to the old project before switching
+    if (db && this.currentUser && this.activeProjectId) {
+      this._saveDirty = true;
+      this._flushSave();
+    }
+
+    const oldProjectId = this.activeProjectId;
+    this.activeProjectId = projectId || null;
+
+    if (!projectId) {
+      // Deselected project — revert to localStorage
+      if (this._firestoreUnsubscribe) {
+        this._firestoreUnsubscribe();
+        this._firestoreUnsubscribe = null;
+      }
+      this.boards = [];
+      this.elements = [];
+      this._loadFromLocalStorage();
+      if (this.boards.length > 0 && this.activeBoardId) {
+        this.switchBoard(this.activeBoardId);
+      }
+      this.toast('Switched to local storage');
+      return;
+    }
+
+    // Load from new project's Firestore path
+    if (db && this.currentUser) {
+      this.loadFromFirestore(projectId);
+      this.toast(`Project: ${this.projects.find(p => p.id === projectId)?.name || projectId}`);
+    }
+  },
+
   // ─── Data persistence ────────────────────────────────────
   storageKey(k) { return (this.isDemo ? 'demo_db_forgeboard_' : 'forgeboard_') + k; },
 
-  loadData() {
+  _loadFromLocalStorage() {
     try {
       const raw = localStorage.getItem(this.storageKey('boards'));
       if (raw) {
         const d = JSON.parse(raw);
         this.boards = d.boards || [];
         this.activeBoardId = d.activeBoardId || (this.boards[0] && this.boards[0].id);
+        return true;
       }
-    } catch(e) { console.warn('Failed to load data', e); }
+    } catch(e) { console.warn('Failed to load from localStorage', e); }
+    return false;
   },
 
-  saveData() {
-    clearTimeout(this._saveTimer);
-    this._saveTimer = setTimeout(() => {
-      // Sync current board state
-      const b = this.getActiveBoard();
-      if (b) {
-        b.elements = JSON.parse(JSON.stringify(this.elements));
-        b.viewport = { ...this.viewport };
-        b.modified = new Date().toISOString();
+  loadData() {
+    // When logged in with an active project, try Firestore (project-scoped)
+    if (db && this.currentUser && this.activeProjectId) {
+      this.loadFromFirestore(this.activeProjectId);
+    } else if (db && this.currentUser && !this.activeProjectId) {
+      // Logged in but no project — use personal Firestore path
+      this._loadPersonalFromFirestore();
+    } else {
+      this._loadFromLocalStorage();
+    }
+  },
+
+  _loadPersonalFromFirestore() {
+    if (!db || !this.currentUser) { this._loadFromLocalStorage(); return; }
+    const docRef = db.collection('users').doc(this.currentUser.uid)
+      .collection('app_data').doc('forgeboard_state');
+    docRef.get().then(snap => {
+      if (snap.exists) {
+        const d = snap.data();
+        this.boards = d.boards || [];
+        this.activeBoardId = d.activeBoardId || (this.boards[0] && this.boards[0].id);
+        console.log('[ForgeBoard] Loaded personal boards from Firestore');
+      } else {
+        this._loadFromLocalStorage();
       }
-      try {
-        localStorage.setItem(this.storageKey('boards'), JSON.stringify({
-          boards: this.boards,
-          activeBoardId: this.activeBoardId
-        }));
-      } catch(e) { console.warn('Save failed', e); }
-    }, 500);
+      if (this.boards.length > 0 && this.activeBoardId) this.switchBoard(this.activeBoardId);
+    }).catch(() => this._loadFromLocalStorage());
+  },
+
+  loadFromFirestore(projectId) {
+    // Unsubscribe previous listener if any
+    if (this._firestoreUnsubscribe) {
+      this._firestoreUnsubscribe();
+      this._firestoreUnsubscribe = null;
+    }
+    const docRef = db.collection('projects').doc(projectId)
+      .collection('forgeboard').doc('state');
+
+    // Initial load
+    docRef.get().then(snap => {
+      if (snap.exists) {
+        const d = snap.data();
+        this.boards = d.boards || [];
+        this.activeBoardId = d.activeBoardId || (this.boards[0] && this.boards[0].id);
+        console.log('[ForgeBoard] Loaded from Firestore:', this.boards.length, 'boards');
+      } else {
+        // Firestore has no data, fall back to localStorage
+        this._loadFromLocalStorage();
+        console.log('[ForgeBoard] No Firestore data, loaded from localStorage');
+      }
+      if (this.boards.length > 0 && this.activeBoardId) {
+        this.switchBoard(this.activeBoardId);
+      }
+    }).catch(err => {
+      console.warn('[ForgeBoard] Firestore load failed, using localStorage', err);
+      this._loadFromLocalStorage();
+    });
+
+    // Listen for real-time updates
+    this._firestoreUnsubscribe = docRef.onSnapshot(snap => {
+      if (!snap.exists) return;
+      const d = snap.data();
+      // Only apply if different from current state (avoid loop)
+      const remoteUpdatedAt = d.updatedAt || 0;
+      if (remoteUpdatedAt > (this._lastFirestoreUpdate || 0)) {
+        this._lastFirestoreUpdate = remoteUpdatedAt;
+        this.boards = d.boards || [];
+        this.activeBoardId = d.activeBoardId || (this.boards[0] && this.boards[0].id);
+        const b = this.getActiveBoard();
+        if (b) {
+          this.elements = JSON.parse(JSON.stringify(b.elements || []));
+          this.viewport = { ...b.viewport };
+          document.getElementById('board-name').textContent = b.name;
+          this.render();
+        }
+      }
+    }, err => {
+      console.warn('[ForgeBoard] onSnapshot error', err);
+    });
+  },
+
+  _saveDirty: false,
+  _firestoreSaveTimer: null,
+
+  saveData() {
+    this._saveDirty = true;
+    clearTimeout(this._saveTimer);
+    this._saveTimer = setTimeout(() => this._flushSave(), 500);
+  },
+
+  _flushSave() {
+    if (!this._saveDirty) return;
+    this._saveDirty = false;
+    const b = this.getActiveBoard();
+    if (b) {
+      b.elements = JSON.parse(JSON.stringify(this.elements));
+      b.viewport = { ...this.viewport };
+      b.modified = new Date().toISOString();
+    }
+    // Always save to localStorage as backup
+    try {
+      localStorage.setItem(this.storageKey('boards'), JSON.stringify({
+        boards: this.boards,
+        activeBoardId: this.activeBoardId
+      }));
+    } catch(e) { console.warn('Save failed', e); }
+
+    // Save to Firestore (primary when logged in)
+    if (db && this.currentUser) {
+      clearTimeout(this._firestoreSaveTimer);
+      this._firestoreSaveTimer = setTimeout(() => {
+        const data = {
+          boards: JSON.parse(JSON.stringify(this.boards)),
+          activeBoardId: this.activeBoardId,
+          updatedAt: Date.now(),
+        };
+        const docRef = this.activeProjectId
+          ? db.collection('projects').doc(this.activeProjectId).collection('forgeboard').doc('state')
+          : db.collection('users').doc(this.currentUser.uid).collection('app_data').doc('forgeboard_state');
+        docRef.set(data, { merge: false })
+          .then(() => console.log('[ForgeBoard] Saved to Firestore' + (this.activeProjectId ? ' (project)' : ' (personal)')))
+          .catch(err => console.warn('[ForgeBoard] Firestore save failed', err));
+      }, 500);
+    }
+  },
+
+  _startAutoSave() {
+    // Periodic auto-save every 2 seconds as a safety net
+    this._autoSaveInterval = setInterval(() => {
+      this._saveDirty = true;
+      this._flushSave();
+    }, 2000);
+    // Immediate save on tab hide or close
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) { this._saveDirty = true; this._flushSave(); }
+    });
+    window.addEventListener('beforeunload', () => {
+      this._saveDirty = true;
+      this._flushSave();
+    });
   },
 
   makeBoard(name, elements = []) {
@@ -709,6 +1603,12 @@ const app = {
 
   setTool(id) {
     if (id === 'symbol') { this.toggleSymbolPanel(); return; }
+    if (id === 'image') { this.promptImageUpload(); return; }
+    if (id === 'math') { this.openMathModal(); return; }
+    if (id === 'chart') { this.openChartModal(); return; }
+    if (id === 'table') { this.openTableModal(); return; }
+    // Hide symbol panel when switching away
+    document.getElementById('symbol-panel').classList.remove('show');
     this.tool = id;
     document.querySelectorAll('.sb-tool[data-tool],.tb-tool[data-tool]').forEach(b => {
       b.classList.toggle('active', b.dataset.tool === id);
@@ -720,8 +1620,11 @@ const app = {
     // Show/hide draw canvas
     document.getElementById('draw-canvas').style.pointerEvents = (id === 'pen' || id === 'eraser') ? 'auto' : 'none';
     // Show/hide pen panel
-    if (id === 'pen' || id === 'eraser') this.showPenPanel(id);
-    else this.hidePenPanel();
+    if (id === 'pen' || id === 'eraser') { this.showPenPanel(id); this.hideShapePanel(); }
+    else if (['rectangle','ellipse','diamond','line','arrow','connector'].includes(id)) { this.showShapePanel(); this.hidePenPanel(); }
+    else { this.hidePenPanel(); this.hideShapePanel(); }
+    // Show/hide connection ports
+    this.renderPorts();
   },
 
   // ─── Pen options panel ──────────────────────────────────
@@ -850,9 +1753,916 @@ const app = {
     return rgb === computed;
   },
 
+  // ─── Shape options panel ──────────────────────────────
+  buildShapePanel() {
+    const fillGrid = document.getElementById('sp-fill-grid');
+    const strokeGrid = document.getElementById('sp-stroke-grid');
+    // Fill swatches
+    SHAPE_FILLS.forEach(c => {
+      const sw = document.createElement('div');
+      sw.className = 'pp-swatch';
+      sw.style.background = c === 'transparent' ? 'linear-gradient(45deg,#ccc 25%,transparent 25%,transparent 75%,#ccc 75%),linear-gradient(45deg,#ccc 25%,transparent 25%,transparent 75%,#ccc 75%)' : c;
+      if (c === 'transparent') { sw.style.backgroundSize = '8px 8px'; sw.style.backgroundPosition = '0 0,4px 4px'; }
+      sw.dataset.color = c;
+      sw.onclick = () => this.setShapeFill(c);
+      fillGrid.appendChild(sw);
+    });
+    // Custom fill picker
+    const customFill = document.createElement('input');
+    customFill.type = 'color';
+    customFill.className = 'pp-custom-color';
+    customFill.value = '#292524';
+    customFill.title = 'Custom fill';
+    customFill.oninput = () => this.setShapeFill(customFill.value);
+    fillGrid.appendChild(customFill);
+    // Stroke swatches
+    STROKE_COLORS.forEach(c => {
+      const sw = document.createElement('div');
+      sw.className = 'pp-swatch';
+      sw.style.background = c;
+      sw.dataset.color = c;
+      sw.onclick = () => this.setShapeStroke(c);
+      strokeGrid.appendChild(sw);
+    });
+    // Custom stroke picker
+    const customStroke = document.createElement('input');
+    customStroke.type = 'color';
+    customStroke.className = 'pp-custom-color';
+    customStroke.value = '#f59e0b';
+    customStroke.title = 'Custom stroke';
+    customStroke.oninput = () => this.setShapeStroke(customStroke.value);
+    strokeGrid.appendChild(customStroke);
+  },
+
+  showShapePanel() {
+    const panel = document.getElementById('shape-panel');
+    // Sync controls
+    document.getElementById('sp-stroke-width').value = this.shapeStrokeWidth;
+    document.getElementById('sp-stroke-width-val').textContent = this.shapeStrokeWidth + 'px';
+    // Highlight active swatches
+    const currentFill = this.shapeFill || this._themeBg2();
+    const currentStroke = this.shapeStroke || this._themeAccent();
+    document.querySelectorAll('#sp-fill-grid .pp-swatch').forEach(s => s.classList.toggle('active', s.dataset.color === currentFill || this.rgbMatch(s.style.background, currentFill)));
+    document.querySelectorAll('#sp-stroke-grid .pp-swatch').forEach(s => s.classList.toggle('active', s.dataset.color === currentStroke || this.rgbMatch(s.style.background, currentStroke)));
+    document.querySelectorAll('#sp-dash-options .pp-dash-btn').forEach(b => b.classList.toggle('active', b.dataset.dash === this.shapeStrokeDash));
+    panel.classList.add('show');
+  },
+
+  hideShapePanel() {
+    document.getElementById('shape-panel').classList.remove('show');
+  },
+
+  setShapeFill(c) {
+    this.shapeFill = c;
+    document.querySelectorAll('#sp-fill-grid .pp-swatch').forEach(s => s.classList.toggle('active', s.dataset.color === c || this.rgbMatch(s.style.background, c)));
+    const custom = document.querySelector('#sp-fill-grid .pp-custom-color');
+    if (custom && c.startsWith('#')) custom.value = c;
+  },
+
+  setShapeStroke(c) {
+    this.shapeStroke = c;
+    document.querySelectorAll('#sp-stroke-grid .pp-swatch').forEach(s => s.classList.toggle('active', s.dataset.color === c || this.rgbMatch(s.style.background, c)));
+    const custom = document.querySelector('#sp-stroke-grid .pp-custom-color');
+    if (custom && c.startsWith('#')) custom.value = c;
+  },
+
+  setShapeStrokeWidth(w) {
+    this.shapeStrokeWidth = w;
+    document.getElementById('sp-stroke-width-val').textContent = w + 'px';
+  },
+
+  setShapeStrokeDash(d) {
+    this.shapeStrokeDash = d;
+    document.querySelectorAll('#sp-dash-options .pp-dash-btn').forEach(b => b.classList.toggle('active', b.dataset.dash === d));
+  },
+
+  // ─── Image support ─────────────────────────────────────
+  promptImageUpload() {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.onchange = () => {
+      if (input.files && input.files[0]) this.addImageFromFile(input.files[0]);
+    };
+    input.click();
+  },
+
+  addImageFromFile(file) {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const dataURL = e.target.result;
+      const img = new Image();
+      img.onload = () => {
+        const maxW = 400, maxH = 400;
+        let w = img.width, h = img.height;
+        if (w > maxW) { h *= maxW / w; w = maxW; }
+        if (h > maxH) { w *= maxH / h; h = maxH; }
+        this.pushUndo();
+        const el = this.createElement('image', this.viewport.x + 100, this.viewport.y + 100, w, h);
+        el.imageData = dataURL;
+        el.fill = 'transparent';
+        el.stroke = 'none';
+        el.strokeWidth = 0;
+        this.elements.push(el);
+        this.selection = [el.id];
+        this.render();
+        this.saveData();
+        this.toast('Image placed');
+      };
+      img.src = dataURL;
+    };
+    reader.readAsDataURL(file);
+  },
+
+  // ─── Math / LaTeX support ─────────────────────────────
+  _mathCheatsheet: [
+    { label: 'Fraction', tex: '\\frac{a}{b}' },
+    { label: 'Square root', tex: '\\sqrt{x}' },
+    { label: 'Nth root', tex: '\\sqrt[n]{x}' },
+    { label: 'Superscript', tex: 'x^{2}' },
+    { label: 'Subscript', tex: 'x_{i}' },
+    { label: 'Sum', tex: '\\sum_{i=0}^{n} x_i' },
+    { label: 'Product', tex: '\\prod_{i=1}^{n} x_i' },
+    { label: 'Integral', tex: '\\int_{a}^{b} f(x)\\,dx' },
+    { label: 'Limit', tex: '\\lim_{x \\to \\infty} f(x)' },
+    { label: 'Infinity', tex: '\\infty' },
+    { label: 'Greek α β γ', tex: '\\alpha, \\beta, \\gamma' },
+    { label: 'Greek θ λ π', tex: '\\theta, \\lambda, \\pi' },
+    { label: 'Greek Σ Δ Ω', tex: '\\Sigma, \\Delta, \\Omega' },
+    { label: 'Not equal', tex: '\\neq' },
+    { label: 'Less/greater eq', tex: '\\leq, \\geq' },
+    { label: 'Approx', tex: '\\approx' },
+    { label: 'Plus-minus', tex: '\\pm' },
+    { label: 'Times / dot', tex: '\\times, \\cdot' },
+    { label: 'Division', tex: '\\div' },
+    { label: 'Matrix 2×2', tex: '\\begin{pmatrix} a & b \\\\ c & d \\end{pmatrix}' },
+    { label: 'Cases', tex: 'f(x) = \\begin{cases} 1 & x > 0 \\\\ 0 & x = 0 \\end{cases}' },
+    { label: 'Binomial', tex: '\\binom{n}{k}' },
+    { label: 'Overline', tex: '\\overline{AB}' },
+    { label: 'Vector', tex: '\\vec{v}' },
+    { label: 'Hat', tex: '\\hat{x}' },
+    { label: 'Dot (derivative)', tex: '\\dot{x}, \\ddot{x}' },
+    { label: 'Partial', tex: '\\frac{\\partial f}{\\partial x}' },
+    { label: 'Nabla', tex: '\\nabla' },
+    { label: 'Set membership', tex: '\\in, \\notin, \\subset' },
+    { label: 'Union / intersect', tex: '\\cup, \\cap' },
+    { label: 'For all / exists', tex: '\\forall, \\exists' },
+    { label: 'Arrow right', tex: '\\rightarrow, \\Rightarrow' },
+    { label: 'Arrow left-right', tex: '\\leftrightarrow' },
+    { label: 'Text in math', tex: '\\text{where } x > 0' },
+    { label: 'Aligned eqs', tex: '\\begin{aligned} a &= b + c \\\\ d &= e + f \\end{aligned}' },
+    { label: 'Underbrace', tex: '\\underbrace{a+b+c}_{\\text{sum}}' },
+  ],
+
+  openMathModal(existingEl) {
+    const input = document.getElementById('math-input');
+    const btn = document.querySelector('#modal-math .btn-primary');
+    if (existingEl && existingEl.latex !== undefined) {
+      this._mathEditing = existingEl.id;
+      input.value = existingEl.latex || '';
+      btn.textContent = 'Update Equation';
+    } else {
+      this._mathEditing = null;
+      input.value = 'E = mc^2';
+      btn.textContent = 'Insert Equation';
+    }
+    this._mathBuildCheatsheet();
+    this.openModal('modal-math');
+    this.mathUpdatePreview();
+    // Focus textarea after modal animation
+    setTimeout(() => input.focus(), 100);
+  },
+
+  closeMathModal() {
+    this.closeModal('modal-math');
+    this._mathEditing = null;
+  },
+
+  _mathBuildCheatsheet() {
+    const grid = document.getElementById('math-cheatsheet-grid');
+    if (grid.children.length > 0) return; // already built
+    for (const item of this._mathCheatsheet) {
+      const div = document.createElement('div');
+      div.className = 'mc-item';
+      div.title = item.tex;
+      const code = document.createElement('code');
+      code.textContent = item.tex;
+      const render = document.createElement('span');
+      render.className = 'mc-render';
+      if (window.katex) {
+        try { katex.render(item.tex, render, { throwOnError: false, displayMode: false }); }
+        catch(e) { render.textContent = '?'; }
+      }
+      div.appendChild(code);
+      div.appendChild(render);
+      div.addEventListener('click', () => {
+        const ta = document.getElementById('math-input');
+        const start = ta.selectionStart;
+        const end = ta.selectionEnd;
+        const before = ta.value.substring(0, start);
+        const after = ta.value.substring(end);
+        ta.value = before + item.tex + after;
+        ta.focus();
+        const newPos = start + item.tex.length;
+        ta.setSelectionRange(newPos, newPos);
+        this.mathUpdatePreview();
+      });
+      grid.appendChild(div);
+    }
+  },
+
+  mathUpdatePreview() {
+    const latex = document.getElementById('math-input').value.trim();
+    const preview = document.getElementById('math-preview');
+    preview.innerHTML = '';
+    if (!latex) {
+      preview.innerHTML = '<span style="color:var(--fg3);font-size:12px">Type LaTeX above to preview</span>';
+      return;
+    }
+    if (window.katex) {
+      try {
+        katex.render(latex, preview, { throwOnError: true, displayMode: true });
+      } catch (e) {
+        const errDiv = document.createElement('div');
+        errDiv.className = 'math-error';
+        errDiv.textContent = e.message || 'Invalid LaTeX';
+        preview.appendChild(errDiv);
+      }
+    } else {
+      preview.textContent = latex;
+    }
+  },
+
+  saveMath() {
+    const latex = document.getElementById('math-input').value.trim();
+    if (!latex) return;
+    if (this._mathEditing) {
+      // Editing existing equation
+      const el = this.elements.find(e => e.id === this._mathEditing);
+      if (el && el.latex !== latex) {
+        this.pushUndo();
+        el.latex = latex;
+        this.render();
+        this.saveData();
+      }
+    } else {
+      // Insert new equation
+      this.pushUndo();
+      const el = this.createElement('math', this.viewport.x + 100, this.viewport.y + 100, 200, 60);
+      el.latex = latex;
+      el.fontSize = 18;
+      el.fill = 'transparent';
+      el.stroke = 'none';
+      el.strokeWidth = 0;
+      this.elements.push(el);
+      this.selection = [el.id];
+      this.render();
+      this.saveData();
+      this.toast('Equation placed');
+    }
+    this.closeMathModal();
+  },
+
+  // ─── Chart / Plotly support ─────────────────────────────
+  openChartModal(existingEl) {
+    if (existingEl && existingEl.chartConfig) {
+      this._chartEditing = existingEl.id;
+      this._chartType = existingEl.chartConfig.type || 'bar';
+      this._chartData = JSON.parse(JSON.stringify(existingEl.chartConfig.data));
+    } else {
+      this._chartEditing = null;
+      this._chartType = 'bar';
+      this._chartData = [
+        ['X', 'Series 1', 'Series 2'],
+        ['A', '10', '15'],
+        ['B', '25', '18'],
+        ['C', '15', '22'],
+        ['D', '30', '12']
+      ];
+    }
+    document.getElementById('chart-type').value = this._chartType;
+    this.chartBuildTable();
+    this.openModal('modal-chart');
+    setTimeout(() => this.chartUpdatePreview(), 100);
+  },
+
+  closeChartModal() {
+    this.closeModal('modal-chart');
+    this._chartEditing = null;
+  },
+
+  chartSwitchTab(tab) {
+    document.querySelectorAll('.chart-tab').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+    document.getElementById('chart-data-tab').style.display = tab === 'data' ? '' : 'none';
+    document.getElementById('chart-csv-tab').style.display = tab === 'csv' ? '' : 'none';
+    if (tab === 'csv') this.chartExportCSV();
+  },
+
+  chartBuildTable() {
+    const table = document.getElementById('chart-table');
+    const data = this._chartData;
+    if (!data.length) return;
+    let html = '<thead><tr>';
+    data[0].forEach((h, ci) => {
+      html += `<th contenteditable="true" data-r="0" data-c="${ci}">${h}</th>`;
+    });
+    html += '</tr></thead><tbody>';
+    for (let r = 1; r < data.length; r++) {
+      html += '<tr>';
+      for (let c = 0; c < data[0].length; c++) {
+        html += `<td contenteditable="true" data-r="${r}" data-c="${c}">${data[r] && data[r][c] != null ? data[r][c] : ''}</td>`;
+      }
+      html += '</tr>';
+    }
+    html += '</tbody>';
+    table.innerHTML = html;
+    // Attach input listeners
+    table.querySelectorAll('[contenteditable]').forEach(cell => {
+      cell.addEventListener('input', () => {
+        clearTimeout(this._chartDebounce);
+        this._chartDebounce = setTimeout(() => {
+          this.chartReadTable();
+          this.chartUpdatePreview();
+        }, 300);
+      });
+    });
+  },
+
+  chartReadTable() {
+    const table = document.getElementById('chart-table');
+    const rows = table.querySelectorAll('tr');
+    this._chartData = [];
+    rows.forEach(row => {
+      const cells = row.querySelectorAll('th, td');
+      const r = [];
+      cells.forEach(c => r.push(c.textContent.trim()));
+      this._chartData.push(r);
+    });
+  },
+
+  chartAddRow() {
+    this.chartReadTable();
+    const cols = this._chartData[0] ? this._chartData[0].length : 3;
+    const newRow = Array(cols).fill('');
+    newRow[0] = String.fromCharCode(65 + this._chartData.length - 1);
+    this._chartData.push(newRow);
+    this.chartBuildTable();
+    this.chartUpdatePreview();
+  },
+
+  chartRemoveRow() {
+    this.chartReadTable();
+    if (this._chartData.length > 2) {
+      this._chartData.pop();
+      this.chartBuildTable();
+      this.chartUpdatePreview();
+    }
+  },
+
+  chartAddCol() {
+    this.chartReadTable();
+    const colIdx = this._chartData[0] ? this._chartData[0].length : 0;
+    this._chartData[0].push('Series ' + colIdx);
+    for (let r = 1; r < this._chartData.length; r++) {
+      this._chartData[r].push('0');
+    }
+    this.chartBuildTable();
+    this.chartUpdatePreview();
+  },
+
+  chartRemoveCol() {
+    this.chartReadTable();
+    if (this._chartData[0] && this._chartData[0].length > 2) {
+      this._chartData.forEach(row => row.pop());
+      this.chartBuildTable();
+      this.chartUpdatePreview();
+    }
+  },
+
+  chartImportCSV() {
+    const csv = document.getElementById('chart-csv').value.trim();
+    if (!csv) return;
+    const lines = csv.split('\n').map(l => l.split(',').map(c => c.trim().replace(/^"|"$/g, '')));
+    if (lines.length < 2) { this.toast('CSV needs at least a header + 1 data row'); return; }
+    this._chartData = lines;
+    this.chartBuildTable();
+    this.chartUpdatePreview();
+    this.chartSwitchTab('data');
+    this.toast('CSV imported');
+  },
+
+  chartExportCSV() {
+    this.chartReadTable();
+    const csv = this._chartData.map(row => row.join(',')).join('\n');
+    document.getElementById('chart-csv').value = csv;
+  },
+
+  _chartDataToTraces() {
+    const data = this._chartData;
+    if (data.length < 2 || data[0].length < 2) return [];
+    const type = this._chartType;
+    const labels = data.slice(1).map(r => r[0]);
+
+    if (type === 'pie' || type === 'donut') {
+      const values = data.slice(1).map(r => parseFloat(r[1]) || 0);
+      return [{ type: 'pie', labels, values, textinfo: 'label+percent',
+        hole: type === 'donut' ? 0.45 : 0 }];
+    }
+
+    if (type === 'histogram') {
+      const traces = [];
+      for (let c = 1; c < data[0].length; c++) {
+        traces.push({
+          x: data.slice(1).map(r => parseFloat(r[c]) || 0),
+          name: data[0][c],
+          type: 'histogram',
+          opacity: 0.7,
+        });
+      }
+      return traces;
+    }
+
+    if (type === 'waterfall') {
+      const values = data.slice(1).map(r => parseFloat(r[1]) || 0);
+      return [{ type: 'waterfall', x: labels, y: values, name: data[0][1] || 'Value',
+        connector: { line: { color: 'rgb(63,63,63)' } },
+        increasing: { marker: { color: '#22c55e' } },
+        decreasing: { marker: { color: '#ef4444' } },
+        totals: { marker: { color: '#3b82f6' } } }];
+    }
+
+    const traces = [];
+    for (let c = 1; c < data[0].length; c++) {
+      const yVals = data.slice(1).map(r => parseFloat(r[c]) || 0);
+      const trace = { x: labels, y: yVals, name: data[0][c] };
+
+      if (type === 'hbar') {
+        trace.type = 'bar';
+        trace.orientation = 'h';
+        trace.x = yVals;
+        trace.y = labels;
+      } else if (type === 'line') {
+        trace.type = 'scatter';
+        trace.mode = 'lines+markers';
+      } else if (type === 'area') {
+        trace.type = 'scatter';
+        trace.mode = 'lines';
+        trace.fill = c === 1 ? 'tozeroy' : 'tonexty';
+      } else if (type === 'scatter') {
+        trace.type = 'scatter';
+        trace.mode = 'markers';
+      } else if (type === 'bubble') {
+        trace.type = 'scatter';
+        trace.mode = 'markers';
+        trace.marker = { size: yVals.map(v => Math.max(8, Math.abs(v))), sizemode: 'area', sizeref: Math.max(...yVals.map(Math.abs)) / 40 };
+      } else {
+        trace.type = 'bar';
+      }
+      traces.push(trace);
+    }
+    return traces;
+  },
+
+  _chartLayout(traceCount) {
+    const t = this.theme || 'dark';
+    const isDark = t === 'dark';
+    const isEink = t === 'eink';
+    return {
+      paper_bgcolor: 'rgba(0,0,0,0)',
+      plot_bgcolor: isDark ? '#18181b' : isEink ? '#f5f5f5' : '#f4f4f5',
+      font: { color: isDark ? '#fafafa' : '#09090b', size: 11 },
+      margin: { t: 30, r: 20, b: 40, l: 40 },
+      xaxis: { gridcolor: isDark ? '#27272a' : isEink ? '#e0e0e0' : '#e4e4e7' },
+      yaxis: { gridcolor: isDark ? '#27272a' : isEink ? '#e0e0e0' : '#e4e4e7' },
+      showlegend: traceCount > 1,
+      legend: { orientation: 'h', y: -0.2 }
+    };
+  },
+
+  chartUpdatePreview() {
+    if (!window.Plotly) return;
+    this._chartType = document.getElementById('chart-type').value;
+    const traces = this._chartDataToTraces();
+    Plotly.newPlot('chart-preview', traces, this._chartLayout(traces.length), { staticPlot: true, responsive: true });
+  },
+
+  refreshChartImages() {
+    if (!window.Plotly) return;
+    const charts = this.elements.filter(e => e.type === 'chart' && e.chartConfig);
+    if (!charts.length) return;
+    let offscreen = document.getElementById('_chart-offscreen');
+    if (!offscreen) {
+      offscreen = document.createElement('div');
+      offscreen.id = '_chart-offscreen';
+      offscreen.style.cssText = 'position:fixed;left:-9999px;top:-9999px;width:600px;height:400px;';
+      document.body.appendChild(offscreen);
+    }
+    // Save current state to restore after
+    const savedType = this._chartType;
+    const savedData = this._chartData;
+    const renderNext = (i) => {
+      if (i >= charts.length) {
+        this._chartType = savedType;
+        this._chartData = savedData;
+        this.render(); this.saveData();
+        return;
+      }
+      const el = charts[i];
+      const cfg = el.chartConfig;
+      if (!cfg.data || cfg.data.length < 2) { renderNext(i + 1); return; }
+      // Temporarily set state so _chartDataToTraces() works
+      this._chartType = cfg.type || 'bar';
+      this._chartData = cfg.data;
+      const traces = this._chartDataToTraces();
+      Plotly.newPlot(offscreen, traces, this._chartLayout(traces.length), { staticPlot: true }).then(() => {
+        return Plotly.toImage(offscreen, { format: 'png', width: 600, height: 400 });
+      }).then(dataUrl => {
+        el.imageData = dataUrl;
+        renderNext(i + 1);
+      }).catch(() => renderNext(i + 1));
+    };
+    renderNext(0);
+  },
+
+  _rerenderChartElement(el) {
+    if (!window.Plotly || !el.chartConfig) return;
+    let offscreen = document.getElementById('_chart-offscreen');
+    if (!offscreen) {
+      offscreen = document.createElement('div');
+      offscreen.id = '_chart-offscreen';
+      offscreen.style.cssText = 'position:fixed;left:-9999px;top:-9999px;width:600px;height:400px;';
+      document.body.appendChild(offscreen);
+    }
+    const savedType = this._chartType;
+    const savedData = this._chartData;
+    this._chartType = el.chartConfig.type || 'bar';
+    this._chartData = el.chartConfig.data;
+    const traces = this._chartDataToTraces();
+    const w = Math.max(200, Math.round(el.width * 1.5));
+    const h = Math.max(150, Math.round(el.height * 1.5));
+    Plotly.newPlot(offscreen, traces, this._chartLayout(traces.length), { staticPlot: true }).then(() => {
+      return Plotly.toImage(offscreen, { format: 'png', width: w, height: h });
+    }).then(dataUrl => {
+      el.imageData = dataUrl;
+      this._chartType = savedType;
+      this._chartData = savedData;
+      this.render();
+      this.saveData();
+    }).catch(() => {
+      this._chartType = savedType;
+      this._chartData = savedData;
+    });
+  },
+
+  saveChart() {
+    if (!window.Plotly) { this.toast('Plotly not loaded yet'); return; }
+    this.chartReadTable();
+    this._chartType = document.getElementById('chart-type').value;
+    const chartConfig = { type: this._chartType, data: JSON.parse(JSON.stringify(this._chartData)) };
+    const previewEl = document.getElementById('chart-preview');
+
+    Plotly.toImage(previewEl, { format: 'png', width: 600, height: 400 }).then(dataUrl => {
+      if (this._chartEditing) {
+        // Update existing chart element
+        this.pushUndo();
+        const el = this.elements.find(e => e.id === this._chartEditing);
+        if (el) {
+          el.chartConfig = chartConfig;
+          el.imageData = dataUrl;
+          this.render();
+          this.saveData();
+          this.toast('Chart updated');
+        }
+      } else {
+        // Create new chart element
+        this.pushUndo();
+        const el = this.createElement('chart', this.viewport.x + 80, this.viewport.y + 60, 400, 300);
+        el.chartConfig = chartConfig;
+        el.imageData = dataUrl;
+        el.fill = 'transparent';
+        el.stroke = 'none';
+        el.strokeWidth = 0;
+        this.elements.push(el);
+        this.selection = [el.id];
+        this.render();
+        this.saveData();
+        this.toast('Chart inserted');
+      }
+      this.closeChartModal();
+    }).catch(err => {
+      console.error('Chart export failed:', err);
+      this.toast('Failed to export chart');
+    });
+  },
+
+  // ─── Table support ──────────────────────────────────────
+  openTableModal(existingEl) {
+    if (existingEl && existingEl.tableConfig) {
+      this._tableEditing = existingEl.id;
+      this._tableStyle = existingEl.tableConfig.style || 'striped';
+      this._tableData = JSON.parse(JSON.stringify(existingEl.tableConfig.data));
+    } else {
+      this._tableEditing = null;
+      this._tableStyle = 'striped';
+      this._tableData = [
+        ['Name', 'Value', 'Unit'],
+        ['Voltage', '230', 'V'],
+        ['Current', '16', 'A'],
+        ['Power', '3680', 'W'],
+        ['Frequency', '50', 'Hz']
+      ];
+    }
+    document.getElementById('tbl-style').value = this._tableStyle;
+    this.tableBuildTable();
+    this.openModal('modal-table');
+    setTimeout(() => this.tableUpdatePreview(), 50);
+  },
+
+  closeTableModal() {
+    this.closeModal('modal-table');
+    this._tableEditing = null;
+  },
+
+  tableSwitchTab(tab) {
+    document.querySelectorAll('.table-tab').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+    document.getElementById('table-data-tab').style.display = tab === 'data' ? '' : 'none';
+    document.getElementById('table-csv-tab').style.display = tab === 'csv' ? '' : 'none';
+    if (tab === 'csv') this.tableExportCSV();
+  },
+
+  tableBuildTable() {
+    const table = document.getElementById('tbl-table');
+    const data = this._tableData;
+    if (!data.length) return;
+    let html = '<thead><tr>';
+    data[0].forEach((h, ci) => {
+      html += `<th contenteditable="true" data-r="0" data-c="${ci}">${h}</th>`;
+    });
+    html += '</tr></thead><tbody>';
+    for (let r = 1; r < data.length; r++) {
+      html += '<tr>';
+      for (let c = 0; c < data[0].length; c++) {
+        html += `<td contenteditable="true" data-r="${r}" data-c="${c}">${data[r] && data[r][c] != null ? data[r][c] : ''}</td>`;
+      }
+      html += '</tr>';
+    }
+    html += '</tbody>';
+    table.innerHTML = html;
+    table.querySelectorAll('[contenteditable]').forEach(cell => {
+      cell.addEventListener('input', () => {
+        clearTimeout(this._tableDebounce);
+        this._tableDebounce = setTimeout(() => {
+          this.tableReadTable();
+          this.tableUpdatePreview();
+        }, 300);
+      });
+    });
+  },
+
+  tableReadTable() {
+    const table = document.getElementById('tbl-table');
+    const rows = table.querySelectorAll('tr');
+    this._tableData = [];
+    rows.forEach(row => {
+      const cells = row.querySelectorAll('th, td');
+      const r = [];
+      cells.forEach(c => r.push(c.textContent.trim()));
+      this._tableData.push(r);
+    });
+  },
+
+  tableAddRow() {
+    this.tableReadTable();
+    const cols = this._tableData[0] ? this._tableData[0].length : 3;
+    this._tableData.push(Array(cols).fill(''));
+    this.tableBuildTable();
+    this.tableUpdatePreview();
+  },
+
+  tableRemoveRow() {
+    this.tableReadTable();
+    if (this._tableData.length > 2) {
+      this._tableData.pop();
+      this.tableBuildTable();
+      this.tableUpdatePreview();
+    }
+  },
+
+  tableAddCol() {
+    this.tableReadTable();
+    const colIdx = this._tableData[0] ? this._tableData[0].length : 0;
+    this._tableData[0].push('Col ' + (colIdx + 1));
+    for (let r = 1; r < this._tableData.length; r++) {
+      this._tableData[r].push('');
+    }
+    this.tableBuildTable();
+    this.tableUpdatePreview();
+  },
+
+  tableRemoveCol() {
+    this.tableReadTable();
+    if (this._tableData[0] && this._tableData[0].length > 2) {
+      this._tableData.forEach(row => row.pop());
+      this.tableBuildTable();
+      this.tableUpdatePreview();
+    }
+  },
+
+  tableImportCSV() {
+    const csv = document.getElementById('tbl-csv').value.trim();
+    if (!csv) return;
+    const lines = csv.split('\n').map(l => l.split(',').map(c => c.trim().replace(/^"|"$/g, '')));
+    if (lines.length < 2) { this.toast('CSV needs at least a header + 1 data row'); return; }
+    this._tableData = lines;
+    this.tableBuildTable();
+    this.tableUpdatePreview();
+    this.tableSwitchTab('data');
+    this.toast('CSV imported');
+  },
+
+  tableExportCSV() {
+    this.tableReadTable();
+    const csv = this._tableData.map(row => row.join(',')).join('\n');
+    document.getElementById('tbl-csv').value = csv;
+  },
+
+  tableUpdatePreview() {
+    this._tableStyle = document.getElementById('tbl-style').value;
+    this.tableReadTable();
+    const data = this._tableData;
+    if (!data.length) return;
+    const prev = document.getElementById('tbl-preview');
+    let html = '<table><thead><tr>';
+    data[0].forEach(h => { html += `<th>${h}</th>`; });
+    html += '</tr></thead><tbody>';
+    for (let r = 1; r < data.length; r++) {
+      html += '<tr>';
+      data[r].forEach(c => { html += `<td>${c}</td>`; });
+      html += '</tr>';
+    }
+    html += '</tbody></table>';
+    prev.innerHTML = html;
+  },
+
+  _renderTableImage(data, style, width, height) {
+    const canvas = document.createElement('canvas');
+    const dpr = 2;
+    canvas.width = width * dpr;
+    canvas.height = height * dpr;
+    const ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+
+    const t = this.theme || 'dark';
+    const isDark = t === 'dark';
+    const isEink = t === 'eink';
+
+    // Theme colors
+    const bgColor = isDark ? '#18181b' : isEink ? '#f5f5f5' : '#ffffff';
+    const headerBg = isDark ? '#f59e0b' : isEink ? '#000000' : '#0066b2';
+    const headerFg = isDark ? '#18181b' : '#ffffff';
+    const cellFg = isDark ? '#fafafa' : '#09090b';
+    const borderColor = isDark ? '#27272a' : isEink ? '#c0c0c0' : '#e4e4e7';
+    const stripeBg = isDark ? '#1e1e22' : isEink ? '#eeeeee' : '#f4f4f5';
+
+    if (!data || data.length < 1) return canvas.toDataURL('image/png');
+
+    const cols = data[0].length;
+    const rows = data.length;
+    const colW = width / cols;
+    const headerH = 28;
+    const rowH = Math.min(24, (height - headerH) / Math.max(1, rows - 1));
+    const fontSize = Math.min(12, rowH * 0.55);
+
+    // Background
+    ctx.fillStyle = bgColor;
+    ctx.fillRect(0, 0, width, height);
+
+    // Header
+    ctx.fillStyle = headerBg;
+    ctx.fillRect(0, 0, width, headerH);
+    ctx.fillStyle = headerFg;
+    ctx.font = `bold ${fontSize}px "JetBrains Mono", monospace`;
+    ctx.textBaseline = 'middle';
+    data[0].forEach((h, c) => {
+      ctx.fillText(h, c * colW + 8, headerH / 2, colW - 16);
+    });
+
+    // Data rows
+    ctx.font = `${fontSize}px "JetBrains Mono", monospace`;
+    for (let r = 1; r < rows; r++) {
+      const y = headerH + (r - 1) * rowH;
+      // Stripe background
+      if (style === 'striped' && r % 2 === 0) {
+        ctx.fillStyle = stripeBg;
+        ctx.fillRect(0, y, width, rowH);
+      }
+      // Cell text
+      ctx.fillStyle = cellFg;
+      for (let c = 0; c < cols; c++) {
+        const val = (data[r] && data[r][c]) || '';
+        ctx.fillText(val, c * colW + 8, y + rowH / 2, colW - 16);
+      }
+    }
+
+    // Grid lines
+    ctx.strokeStyle = borderColor;
+    ctx.lineWidth = 0.5;
+    if (style === 'bordered' || style === 'dark-header') {
+      // Full grid
+      for (let r = 0; r <= rows; r++) {
+        const y = r === 0 ? 0 : headerH + (r - 1) * rowH;
+        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(width, y); ctx.stroke();
+      }
+      for (let c = 0; c <= cols; c++) {
+        ctx.beginPath(); ctx.moveTo(c * colW, 0); ctx.lineTo(c * colW, headerH + (rows - 1) * rowH); ctx.stroke();
+      }
+    } else {
+      // Row lines only
+      for (let r = 1; r < rows; r++) {
+        const y = headerH + (r - 1) * rowH;
+        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(width, y); ctx.stroke();
+      }
+    }
+    // Bottom border
+    const bottomY = headerH + (rows - 1) * rowH;
+    ctx.beginPath(); ctx.moveTo(0, bottomY); ctx.lineTo(width, bottomY); ctx.stroke();
+    // Outer border
+    if (style !== 'minimal') {
+      ctx.strokeStyle = borderColor;
+      ctx.lineWidth = 1;
+      ctx.strokeRect(0, 0, width, bottomY);
+    }
+
+    return canvas.toDataURL('image/png');
+  },
+
+  saveTable() {
+    this.tableReadTable();
+    this._tableStyle = document.getElementById('tbl-style').value;
+    const tableConfig = { style: this._tableStyle, data: JSON.parse(JSON.stringify(this._tableData)) };
+    const w = Math.max(300, this._tableData[0].length * 120);
+    const h = Math.max(100, this._tableData.length * 26 + 10);
+    const imageData = this._renderTableImage(this._tableData, this._tableStyle, w, h);
+
+    if (this._tableEditing) {
+      this.pushUndo();
+      const el = this.elements.find(e => e.id === this._tableEditing);
+      if (el) {
+        el.tableConfig = tableConfig;
+        el.imageData = imageData;
+        el.width = w;
+        el.height = h;
+        this.render();
+        this.saveData();
+        this.toast('Table updated');
+      }
+    } else {
+      this.pushUndo();
+      const el = this.createElement('table', this.viewport.x + 80, this.viewport.y + 60, w, h);
+      el.tableConfig = tableConfig;
+      el.imageData = imageData;
+      el.fill = 'transparent';
+      el.stroke = 'none';
+      el.strokeWidth = 0;
+      this.elements.push(el);
+      this.selection = [el.id];
+      this.render();
+      this.saveData();
+      this.toast('Table inserted');
+    }
+    this.closeTableModal();
+  },
+
+  _rerenderTableElement(el) {
+    if (!el.tableConfig) return;
+    const cfg = el.tableConfig;
+    const imageData = this._renderTableImage(cfg.data, cfg.style, Math.round(el.width), Math.round(el.height));
+    el.imageData = imageData;
+    this.render();
+    this.saveData();
+  },
+
+  refreshTableImages() {
+    const tables = this.elements.filter(e => e.type === 'table' && e.tableConfig);
+    if (!tables.length) return;
+    tables.forEach(el => {
+      el.imageData = this._renderTableImage(el.tableConfig.data, el.tableConfig.style, Math.round(el.width), Math.round(el.height));
+    });
+    this.render();
+    this.saveData();
+  },
+
   toggleSidebar() {
     this.sidebarExpanded = !this.sidebarExpanded;
     document.getElementById('sidebar').classList.toggle('expanded', this.sidebarExpanded);
+  },
+
+  toggleGrid() {
+    this.snapToGrid = !this.snapToGrid;
+    const gridEl = document.getElementById('canvas-grid');
+    gridEl.style.display = this.snapToGrid ? '' : 'none';
+    document.getElementById('grid-btn').classList.toggle('active', this.snapToGrid);
+    this.toast(this.snapToGrid ? 'Grid: On' : 'Grid: Off');
   },
 
   // ─── Canvas coordinate transforms ───────────────────────
@@ -907,12 +2717,14 @@ const app = {
     this.viewport.x = p.x - (cx - r.left) / newZ;
     this.viewport.y = p.y - (cy - r.top) / newZ;
     this.updateViewBox();
+    this.saveData();
   },
 
   fitToScreen() {
     if (this.elements.length === 0) {
       this.viewport = { x: -500, y: -300, zoom: 1 };
       this.updateViewBox();
+      this.saveData();
       return;
     }
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
@@ -932,6 +2744,7 @@ const app = {
     this.viewport.x = minX - pad - (svg.width / z - w) / 2;
     this.viewport.y = minY - pad - (svg.height / z - h) / 2;
     this.updateViewBox();
+    this.saveData();
   },
 
   // ─── Events ──────────────────────────────────────────────
@@ -971,6 +2784,20 @@ const app = {
     // Double click to edit
     svg.addEventListener('dblclick', (e) => this.onDblClick(e));
 
+    // Paste images from clipboard
+    document.addEventListener('paste', (e) => {
+      const items = e.clipboardData && e.clipboardData.items;
+      if (!items) return;
+      for (const item of items) {
+        if (item.type.startsWith('image/')) {
+          e.preventDefault();
+          const file = item.getAsFile();
+          this.addImageFromFile(file);
+          return;
+        }
+      }
+    });
+
     // Drag & drop symbols from symbol panel onto canvas
     svg.addEventListener('dragover', (e) => e.preventDefault());
     svg.addEventListener('drop', (e) => {
@@ -993,6 +2820,8 @@ const app = {
             el.symbolCircle = s.circle || false;
             el.symbolFill = s.fillColor || '';
             el.symbolDash = s.dasharray || '';
+            el.opacity = 1;
+            el.iconScale = 1;
             this.elements.push(el);
             this.selection = [el.id];
             this.render();
@@ -1045,12 +2874,22 @@ const app = {
     }
 
     if (this.tool === 'select') {
+      // First check if clicking on edge/handle of a selected element
+      for (const id of this.selection) {
+        const sel = this.elements.find(e => e.id === id);
+        if (!sel) continue;
+        const handle = this.hitResizeHandle(p.x, p.y, sel);
+        if (handle) {
+          this.resizing = { el: sel, handle, startX: p.x, startY: p.y, orig: { x: sel.x, y: sel.y, width: sel.width || 0, height: sel.height || 0, fontSize: sel.fontSize } };
+          return;
+        }
+      }
       const hit = this.hitTest(p.x, p.y);
       if (hit) {
-        // Check if clicking a resize handle
+        // Check if clicking a resize handle of hit element
         const handle = this.hitResizeHandle(p.x, p.y, hit);
         if (handle) {
-          this.resizing = { el: hit, handle, startX: p.x, startY: p.y, orig: { x: hit.x, y: hit.y, width: hit.width || 0, height: hit.height || 0 } };
+          this.resizing = { el: hit, handle, startX: p.x, startY: p.y, orig: { x: hit.x, y: hit.y, width: hit.width || 0, height: hit.height || 0, fontSize: hit.fontSize } };
           return;
         }
         if (!e.shiftKey && !this.selection.includes(hit.id)) {
@@ -1105,12 +2944,16 @@ const app = {
       return;
     }
 
-    // Line / Arrow / Connector
+    // Line / Arrow / Connector — snap start to nearest port
     if (['line', 'arrow', 'connector'].includes(this.tool)) {
+      const snap = this.findNearestPort(p.x, p.y, 15);
+      const sx = snap ? snap.x : p.x;
+      const sy = snap ? snap.y : p.y;
       this.drawing = {
         type: this.tool,
-        startX: p.x, startY: p.y,
-        endX: p.x, endY: p.y
+        startX: sx, startY: sy,
+        endX: sx, endY: sy,
+        startPort: snap || null,
       };
       return;
     }
@@ -1121,7 +2964,7 @@ const app = {
     // Eraser cursor
     const ec = document.getElementById('eraser-cursor');
     if (this.tool === 'eraser') {
-      const sz = this.eraserRadius * 2;
+      const sz = this.eraserRadius * 2 * this.viewport.zoom;
       ec.style.display = 'block';
       ec.style.width = sz + 'px';
       ec.style.height = sz + 'px';
@@ -1207,6 +3050,11 @@ const app = {
       if (handle.includes('b')) { el.height = Math.max(20, this.snapVal(orig.height + dy)); }
       if (handle.includes('l')) { el.x = this.snapVal(orig.x + dx); el.width = Math.max(20, this.snapVal(orig.width - dx)); }
       if (handle.includes('t')) { el.y = this.snapVal(orig.y + dy); el.height = Math.max(20, this.snapVal(orig.height - dy)); }
+      // Scale font size proportionally for math elements
+      if (el.type === 'math' && orig.height > 0) {
+        const scale = el.height / orig.height;
+        el.fontSize = Math.max(8, Math.round((orig.fontSize || 18) * scale));
+      }
       this.render();
       return;
     }
@@ -1233,12 +3081,33 @@ const app = {
       return;
     }
 
-    // Drawing lines
+    // Drawing lines — snap to ports
     if (this.drawing && ['line', 'arrow', 'connector'].includes(this.drawing.type)) {
-      this.drawing.endX = p.x;
-      this.drawing.endY = p.y;
+      const snap = this.findNearestPort(p.x, p.y, 15);
+      this.drawing.endX = snap ? snap.x : p.x;
+      this.drawing.endY = snap ? snap.y : p.y;
+      this.drawing.snapPort = snap || null;
       this.renderDrawingPreview();
       return;
+    }
+
+    // Hover cursor for resize edges/handles
+    if (this.tool === 'select' && this.selection.length > 0 && !this.dragging) {
+      const wrap = document.getElementById('canvas-wrap');
+      let cursor = 'default';
+      for (const id of this.selection) {
+        const el = this.elements.find(e => e.id === id);
+        if (!el) continue;
+        const h = this.hitResizeHandle(p.x, p.y, el);
+        if (h) {
+          if (h === 'tl' || h === 'br') cursor = 'nwse-resize';
+          else if (h === 'tr' || h === 'bl') cursor = 'nesw-resize';
+          else if (h === 't' || h === 'b') cursor = 'ns-resize';
+          else if (h === 'l' || h === 'r') cursor = 'ew-resize';
+          break;
+        }
+      }
+      wrap.style.cursor = cursor;
     }
   },
 
@@ -1254,6 +3123,7 @@ const app = {
     if (this._panStart) {
       this._panStart = null;
       document.getElementById('canvas-wrap').style.cursor = this.tool === 'pan' ? 'grab' : 'default';
+      this.saveData();
     }
 
     // Finish lasso
@@ -1271,9 +3141,17 @@ const app = {
 
     // Finish resize
     if (this.resizing) {
+      const resizedEl = this.resizing.el;
       this.pushUndo();
       this.resizing = null;
       this.saveData();
+      // Re-render chart/table image at new size
+      if (resizedEl && resizedEl.type === 'chart' && resizedEl.chartConfig) {
+        this._rerenderChartElement(resizedEl);
+      }
+      if (resizedEl && resizedEl.type === 'table' && resizedEl.tableConfig) {
+        this._rerenderTableElement(resizedEl);
+      }
     }
 
     // Finish rubber band
@@ -1384,6 +3262,16 @@ const app = {
   },
 
   onDrawMove(e) {
+    // Update eraser cursor on draw canvas
+    if (this.tool === 'eraser') {
+      const ec = document.getElementById('eraser-cursor');
+      const sz = this.eraserRadius * 2 * this.viewport.zoom;
+      ec.style.display = 'block';
+      ec.style.width = sz + 'px';
+      ec.style.height = sz + 'px';
+      ec.style.left = e.clientX + 'px';
+      ec.style.top = e.clientY + 'px';
+    }
     if (e.pointerType === 'touch' && this._panStart) {
       const dx = (e.clientX - this._panStart.x) / this.viewport.zoom;
       const dy = (e.clientY - this._panStart.y) / this.viewport.zoom;
@@ -1517,6 +3405,7 @@ const app = {
   createElement(type, x, y, w, h) {
     const accentColor = this._themeAccent();
     const bgColor = this._themeBg2();
+    const isShape = ['rectangle','ellipse','diamond','line','arrow','connector'].includes(type);
     return {
       id: uid(),
       type,
@@ -1524,9 +3413,10 @@ const app = {
       width: w,
       height: h,
       rotation: 0,
-      fill: type === 'text' ? 'transparent' : bgColor,
-      stroke: accentColor,
-      strokeWidth: 2,
+      fill: type === 'text' ? 'transparent' : (isShape && this.shapeFill != null ? this.shapeFill : bgColor),
+      stroke: isShape && this.shapeStroke != null ? this.shapeStroke : accentColor,
+      strokeWidth: isShape ? this.shapeStrokeWidth : 2,
+      strokeDasharray: isShape ? this.shapeStrokeDash : '',
       text: '',
       fontSize: 14,
       textAlign: 'center',
@@ -1588,21 +3478,77 @@ const app = {
   hitResizeHandle(x, y, el) {
     if (['line', 'arrow', 'connector', 'freehand'].includes(el.type)) return null;
     const b = this.getElementBounds(el);
+    const pad = 4;
+    const bx = b.x - pad, by = b.y - pad, bw = b.w + pad * 2, bh = b.h + pad * 2;
     const hs = 6 / this.viewport.zoom;
-    const handles = [
-      { name: 'tl', x: b.x, y: b.y },
-      { name: 'tr', x: b.x + b.w, y: b.y },
-      { name: 'bl', x: b.x, y: b.y + b.h },
-      { name: 'br', x: b.x + b.w, y: b.y + b.h },
-      { name: 'r', x: b.x + b.w, y: b.y + b.h / 2 },
-      { name: 'b', x: b.x + b.w / 2, y: b.y + b.h },
-      { name: 'l', x: b.x, y: b.y + b.h / 2 },
-      { name: 't', x: b.x + b.w / 2, y: b.y },
+    // Corner handles (highest priority)
+    const corners = [
+      { name: 'tl', x: bx, y: by },
+      { name: 'tr', x: bx + bw, y: by },
+      { name: 'bl', x: bx, y: by + bh },
+      { name: 'br', x: bx + bw, y: by + bh },
     ];
-    for (const h of handles) {
+    for (const h of corners) {
       if (Math.abs(x - h.x) < hs && Math.abs(y - h.y) < hs) return h.name;
     }
+    // Edge detection — dragging the dashed border
+    const et = 5 / this.viewport.zoom; // edge tolerance
+    const inX = x >= bx - et && x <= bx + bw + et;
+    const inY = y >= by - et && y <= by + bh + et;
+    if (inX && Math.abs(y - by) < et) return 't';
+    if (inX && Math.abs(y - (by + bh)) < et) return 'b';
+    if (inY && Math.abs(x - bx) < et) return 'l';
+    if (inY && Math.abs(x - (bx + bw)) < et) return 'r';
     return null;
+  },
+
+  getPortPositions(el) {
+    if (['line','arrow','connector'].includes(el.type)) return [];
+    const b = this.getElementBounds(el);
+    if (el.type === 'diamond') {
+      return [
+        { x: b.x + b.w / 2, y: b.y, side: 'top' },
+        { x: b.x + b.w, y: b.y + b.h / 2, side: 'right' },
+        { x: b.x + b.w / 2, y: b.y + b.h, side: 'bottom' },
+        { x: b.x, y: b.y + b.h / 2, side: 'left' },
+      ];
+    }
+    return [
+      { x: b.x + b.w / 2, y: b.y, side: 'top' },
+      { x: b.x + b.w, y: b.y + b.h / 2, side: 'right' },
+      { x: b.x + b.w / 2, y: b.y + b.h, side: 'bottom' },
+      { x: b.x, y: b.y + b.h / 2, side: 'left' },
+    ];
+  },
+
+  findNearestPort(x, y, radius) {
+    let best = null, bestDist = radius || 15;
+    this.elements.forEach(el => {
+      if (['line','arrow','connector','freehand'].includes(el.type)) return;
+      this.getPortPositions(el).forEach(pt => {
+        const d = Math.hypot(pt.x - x, pt.y - y);
+        if (d < bestDist) { bestDist = d; best = { ...pt, elId: el.id }; }
+      });
+    });
+    return best;
+  },
+
+  renderPorts() {
+    const pg = document.getElementById('canvas-ports');
+    if (!pg) return;
+    pg.innerHTML = '';
+    if (!['line','arrow','connector'].includes(this.tool)) return;
+    this.elements.forEach(el => {
+      if (['line','arrow','connector','freehand'].includes(el.type)) return;
+      this.getPortPositions(el).forEach(pt => {
+        const c = document.createElementNS(SVG_NS, 'circle');
+        c.setAttribute('cx', pt.x);
+        c.setAttribute('cy', pt.y);
+        c.setAttribute('r', 5);
+        c.setAttribute('class', 'connector-port');
+        pg.appendChild(c);
+      });
+    });
   },
 
   getElementBounds(el) {
@@ -1673,15 +3619,17 @@ const app = {
       group.style.opacity = el.opacity || 1;
 
       if (el.type === 'rectangle' || el.type === 'engineering-block') {
+        const isSymbol = el.type === 'engineering-block';
         const rect = document.createElementNS(SVG_NS, 'rect');
         rect.setAttribute('x', el.x);
         rect.setAttribute('y', el.y);
         rect.setAttribute('width', el.width);
         rect.setAttribute('height', el.height);
-        rect.setAttribute('rx', el.type === 'engineering-block' ? 2 : 6);
-        rect.setAttribute('fill', el.fill || this._themeBg2());
-        rect.setAttribute('stroke', el.stroke || this._themeAccent());
-        rect.setAttribute('stroke-width', el.strokeWidth || 2);
+        rect.setAttribute('rx', isSymbol ? 2 : 6);
+        rect.setAttribute('fill', isSymbol ? 'var(--bg)' : (el.fill || this._themeBg2()));
+        rect.setAttribute('stroke', isSymbol ? 'none' : (el.stroke || this._themeAccent()));
+        rect.setAttribute('stroke-width', isSymbol ? 0 : (el.strokeWidth || 2));
+        if (!isSymbol && el.strokeDasharray) rect.setAttribute('stroke-dasharray', el.strokeDasharray);
         group.appendChild(rect);
 
         // Render SVG symbol schematic inside engineering blocks
@@ -1690,7 +3638,8 @@ const app = {
           const labelH = el.text ? 20 : 0;
           const availW = el.width - pad * 2;
           const availH = el.height - pad * 2 - labelH;
-          const scale = Math.min(availW / 24, availH / 24);
+          const baseScale = Math.min(availW / 24, availH / 24);
+          const scale = baseScale * (el.iconScale || 1);
           const ox = el.x + (el.width - 24 * scale) / 2;
           const oy = el.y + pad + (availH - 24 * scale) / 2;
           const sg = document.createElementNS(SVG_NS, 'g');
@@ -1742,6 +3691,7 @@ const app = {
         ell.setAttribute('fill', el.fill || this._themeBg2());
         ell.setAttribute('stroke', el.stroke || this._themeAccent());
         ell.setAttribute('stroke-width', el.strokeWidth || 2);
+        if (el.strokeDasharray) ell.setAttribute('stroke-dasharray', el.strokeDasharray);
         group.appendChild(ell);
       } else if (el.type === 'diamond') {
         const cx = el.x + el.width / 2;
@@ -1751,6 +3701,7 @@ const app = {
         poly.setAttribute('fill', el.fill || this._themeBg2());
         poly.setAttribute('stroke', el.stroke || this._themeAccent());
         poly.setAttribute('stroke-width', el.strokeWidth || 2);
+        if (el.strokeDasharray) poly.setAttribute('stroke-dasharray', el.strokeDasharray);
         group.appendChild(poly);
       } else if (el.type === 'sticky') {
         const rect = document.createElementNS(SVG_NS, 'rect');
@@ -1771,6 +3722,40 @@ const app = {
         fold.setAttribute('d', `M${fx},${fy} L${el.x + el.width},${fy + 16} L${fx},${fy + 16} Z`);
         fold.setAttribute('fill', 'rgba(0,0,0,.1)');
         group.appendChild(fold);
+      } else if (el.type === 'image') {
+        const img = document.createElementNS(SVG_NS, 'image');
+        img.setAttribute('x', el.x);
+        img.setAttribute('y', el.y);
+        img.setAttribute('width', el.width);
+        img.setAttribute('height', el.height);
+        img.setAttribute('href', el.imageData);
+        img.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+        group.appendChild(img);
+      } else if (el.type === 'math') {
+        const fo = document.createElementNS(SVG_NS, 'foreignObject');
+        fo.setAttribute('x', el.x);
+        fo.setAttribute('y', el.y);
+        fo.setAttribute('width', el.width);
+        fo.setAttribute('height', el.height);
+        const div = document.createElement('div');
+        div.style.cssText = `width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:${el.fontSize || 18}px;color:var(--fg);overflow:hidden;`;
+        if (window.katex) {
+          try { katex.render(el.latex || '', div, { throwOnError: false, displayMode: true }); }
+          catch(e) { div.textContent = el.latex || ''; }
+        } else {
+          div.textContent = el.latex || '';
+        }
+        fo.appendChild(div);
+        group.appendChild(fo);
+      } else if (el.type === 'chart' || el.type === 'table') {
+        const img = document.createElementNS(SVG_NS, 'image');
+        img.setAttribute('x', el.x);
+        img.setAttribute('y', el.y);
+        img.setAttribute('width', el.width);
+        img.setAttribute('height', el.height);
+        if (el.imageData) img.setAttribute('href', el.imageData);
+        img.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+        group.appendChild(img);
       } else if (el.type === 'text') {
         // Just text, no background (or transparent bg)
         if (el.fill && el.fill !== 'transparent') {
@@ -1790,13 +3775,15 @@ const app = {
       // Text label
       if (el.text && el.type !== 'freehand') {
         const isEngSym = el.type === 'engineering-block' && el.symbolPath;
+        const symFontSize = isEngSym ? Math.max(8, Math.round((el.fontSize || 11) * (el.iconScale || 1))) : 0;
+        const symLabelH = isEngSym ? Math.max(16, symFontSize + 8) : 0;
         const fo = document.createElementNS(SVG_NS, 'foreignObject');
         fo.setAttribute('x', el.x + 4);
-        fo.setAttribute('y', isEngSym ? el.y + el.height - 24 : el.y + 4);
+        fo.setAttribute('y', isEngSym ? el.y + el.height - symLabelH : el.y + 4);
         fo.setAttribute('width', el.width - 8);
-        fo.setAttribute('height', isEngSym ? 20 : el.height - 8);
+        fo.setAttribute('height', isEngSym ? symLabelH : el.height - 8);
         const div = document.createElement('div');
-        const engStyle = isEngSym ? `font-size:11px;color:var(--fg);opacity:0.7;` : '';
+        const engStyle = isEngSym ? `font-size:${symFontSize}px;color:var(--fg);opacity:0.7;` : '';
         div.style.cssText = isEngSym
           ? `width:100%;height:100%;display:flex;align-items:center;justify-content:center;${engStyle}overflow:hidden;word-break:break-word;line-height:1.1;white-space:nowrap;text-overflow:ellipsis;`
           : `width:100%;height:100%;display:flex;align-items:center;justify-content:${el.textAlign || 'center'};font-size:${el.fontSize || 14}px;color:${el.type === 'sticky' ? '#1a1a1a' : 'var(--fg)'};overflow:hidden;word-break:break-word;line-height:1.3;white-space:pre-wrap;padding:4px;`;
@@ -1821,7 +3808,8 @@ const app = {
       path.setAttribute('data-id', el.id);
       path.style.opacity = el.opacity || 1;
       if (el.type === 'arrow' || el.type === 'connector') path.setAttribute('marker-end', 'url(#arrow-end)');
-      if (el.type === 'connector') path.setAttribute('stroke-dasharray', '6 3');
+      const pathDash = el.strokeDasharray || (el.type === 'connector' ? '6 3' : '');
+      if (pathDash) path.setAttribute('stroke-dasharray', pathDash);
       container.appendChild(path);
     } else {
       const line = document.createElementNS(SVG_NS, 'line');
@@ -1834,7 +3822,8 @@ const app = {
       line.setAttribute('data-id', el.id);
       line.style.opacity = el.opacity || 1;
       if (el.type === 'arrow' || el.type === 'connector') line.setAttribute('marker-end', 'url(#arrow-end)');
-      if (el.type === 'connector') line.setAttribute('stroke-dasharray', '6 3');
+      const lineDash = el.strokeDasharray || (el.type === 'connector' ? '6 3' : '');
+      if (lineDash) line.setAttribute('stroke-dasharray', lineDash);
       container.appendChild(line);
     }
 
@@ -1963,6 +3952,17 @@ const app = {
         line.setAttribute('marker-end', 'url(#arrow-end-accent)');
       }
       g.appendChild(line);
+      // Snap indicator
+      if (d.snapPort) {
+        const sc = document.createElementNS(SVG_NS, 'circle');
+        sc.setAttribute('cx', d.snapPort.x);
+        sc.setAttribute('cy', d.snapPort.y);
+        sc.setAttribute('r', 7);
+        sc.setAttribute('fill', 'none');
+        sc.setAttribute('stroke', 'var(--accent)');
+        sc.setAttribute('stroke-width', 2);
+        g.appendChild(sc);
+      }
     } else if (d.type === 'text') {
       const rect = document.createElementNS(SVG_NS, 'rect');
       rect.setAttribute('x', d.x);
@@ -2201,9 +4201,9 @@ const app = {
         { label: 'Select All', shortcut: 'Ctrl+A', action: () => { this.selection = this.elements.map(el => el.id); this.render(); } },
         { sep: true },
         { label: 'Fit to Screen', shortcut: 'Ctrl+0', action: () => this.fitToScreen() },
-        { label: 'Reset Zoom', action: () => { this.viewport.zoom = 1; this.updateViewBox(); } },
+        { label: 'Reset Zoom', action: () => { this.viewport.zoom = 1; this.updateViewBox(); this.saveData(); } },
         { sep: true },
-        { label: 'Toggle Grid', action: () => { this.snapToGrid = !this.snapToGrid; this.toast(this.snapToGrid ? 'Grid: On' : 'Grid: Off'); } },
+        { label: 'Toggle Grid', action: () => this.toggleGrid() },
       ];
       items.forEach(item => {
         if (item.sep) { const s = document.createElement('div'); s.className = 'ctx-sep'; menu.appendChild(s); return; }
@@ -2234,6 +4234,26 @@ const app = {
   editElement(id) {
     const el = this.elements.find(e => e.id === id);
     if (!el) return;
+    // Math elements: open LaTeX editor modal
+    if (el.type === 'math') {
+      this.openMathModal(el);
+      return;
+    }
+    // Image elements: replace image
+    if (el.type === 'image') {
+      this.promptImageUpload();
+      return;
+    }
+    // Chart elements: open chart editor
+    if (el.type === 'chart') {
+      this.openChartModal(el);
+      return;
+    }
+    // Table elements: open table editor
+    if (el.type === 'table') {
+      this.openTableModal(el);
+      return;
+    }
     this._editingId = id;
     document.getElementById('edit-text').value = el.text || '';
     document.getElementById('edit-type').value = el.type;
@@ -2263,11 +4283,30 @@ const app = {
     const sel = this.getSelectedElements();
     if (sel.length === 0) return;
     const el = sel[0];
-    document.getElementById('prop-fill').value = el.fill || this._themeBg2();
+    const isSym = el.type === 'engineering-block';
+    const isChart = el.type === 'chart' || el.type === 'table';
+    const isImg = el.type === 'image';
+    const isMediaEl = isChart || isImg;
+    // Show/hide prop groups based on element type
+    document.getElementById('pg-fill').style.display = (isSym || isMediaEl) ? 'none' : '';
+    document.getElementById('pg-opacity').style.display = (isSym || isMediaEl) ? 'none' : '';
+    document.getElementById('pg-stroke').style.display = isMediaEl ? 'none' : '';
+    document.getElementById('pg-stroke-width').style.display = isMediaEl ? 'none' : '';
+    document.getElementById('pg-font-size').style.display = isMediaEl ? 'none' : '';
+    document.getElementById('pg-icon-size').style.display = isSym ? '' : 'none';
+    // Sync values
+    if (!isSym) {
+      document.getElementById('prop-fill').value = el.fill || this._themeBg2();
+      document.getElementById('prop-opacity').value = el.opacity || 1;
+    }
     document.getElementById('prop-stroke').value = el.stroke || this._themeAccent();
     document.getElementById('prop-stroke-width').value = el.strokeWidth || 2;
     document.getElementById('prop-font-size').value = el.fontSize || 14;
-    document.getElementById('prop-opacity').value = el.opacity || 1;
+    if (isSym) {
+      const sc = el.iconScale || 1;
+      document.getElementById('prop-icon-scale').value = sc;
+      document.getElementById('prop-icon-scale-val').textContent = sc + '×';
+    }
     document.getElementById('props-bar').classList.add('show');
   },
 
@@ -2279,7 +4318,15 @@ const app = {
     const sel = this.getSelectedElements();
     if (sel.length === 0) return;
     this.pushUndo();
-    sel.forEach(el => { el[prop] = val; });
+    sel.forEach(el => {
+      // Symbols: fill and opacity are locked
+      if (el.type === 'engineering-block' && (prop === 'fill' || prop === 'opacity')) return;
+      el[prop] = val;
+    });
+    // Update icon scale display
+    if (prop === 'iconScale') {
+      document.getElementById('prop-icon-scale-val').textContent = val + '×';
+    }
     this.render();
     this.saveData();
   },
@@ -2348,12 +4395,21 @@ const app = {
   renameBoard() {
     const b = this.getActiveBoard();
     if (!b) return;
-    const name = prompt('Board name:', b.name);
-    if (name && name.trim()) {
-      b.name = name.trim();
-      document.getElementById('board-name').textContent = b.name;
+    document.getElementById('rename-board-input').value = b.name;
+    this.openModal('modal-rename-board');
+    setTimeout(() => document.getElementById('rename-board-input').select(), 100);
+  },
+
+  saveRenameBoard() {
+    const b = this.getActiveBoard();
+    if (!b) return;
+    const name = document.getElementById('rename-board-input').value.trim();
+    if (name) {
+      b.name = name;
+      document.getElementById('board-name').textContent = name;
       this.saveData();
     }
+    this.closeModal('modal-rename-board');
   },
 
   showNewBoardModal() {
@@ -2504,6 +4560,8 @@ const app = {
     localStorage.setItem('fb_theme', this.theme);
     this.toast('Theme: ' + this.theme);
     this.render();
+    this.refreshChartImages();
+    this.refreshTableImages();
   },
 
   // ─── Modals ──────────────────────────────────────────────
@@ -2524,6 +4582,85 @@ const app = {
   },
 
   // ─── Demo mode ───────────────────────────────────────────
+  setupDemoProject() {
+    // Set up demo user and project for demo mode
+    this.currentUser = {
+      uid: 'demo-user-001',
+      email: 'demo@blacksphereindustries.nl',
+      name: 'Demo User',
+      role: 'admin',
+    };
+    // Initialize Firebase (will use the DemoFirestore shim)
+    if (typeof firebase !== 'undefined' && !_firebaseInitialized) {
+      initFirebaseIfNeeded({ apiKey: 'demo', projectId: 'demo' });
+    }
+    // Read projects from registry (seeded by ERP), fallback to default
+    const regRaw = localStorage.getItem('demo_db_projects');
+    if (regRaw) {
+      const reg = JSON.parse(regRaw);
+      this.projects = Object.keys(reg).map(k => ({ id: reg[k].id || k, name: reg[k].name }));
+    }
+    if (!this.projects || !this.projects.length) {
+      this.projects = [{ id: 'demo_proj_001', name: 'CNC Milling Machine Retrofit' }];
+    }
+    this.activeProjectId = this.projects[0].id;
+    this.renderProjectSelector();
+    // Seed Firestore with demo board data if empty
+    this.seedDemoFirestore();
+  },
+
+  seedDemoFirestore() {
+    if (!db || !this.activeProjectId) return;
+    const docRef = db.collection('projects').doc(this.activeProjectId)
+      .collection('forgeboard').doc('state');
+    docRef.get().then(snap => {
+      if (snap.exists) return; // Already seeded
+      // Build a "System Architecture" demo board
+      const elements = [];
+      // Title block
+      elements.push({ id: 'seed-title', type: 'rectangle', x: 250, y: 40, width: 340, height: 70, fill: '#1e3a5f', stroke: '#3b82f6', strokeWidth: 3, text: 'System Architecture\nOverview', fontSize: 16, textAlign: 'center', opacity: 1, locked: false });
+      // Architecture boxes
+      const boxes = [
+        { name: 'Frontend\n(React)', x: 60, y: 180, color: '#22c55e', bg: '#1a332a' },
+        { name: 'API Gateway\n(REST/gRPC)', x: 280, y: 180, color: '#f59e0b', bg: '#92400e' },
+        { name: 'Backend\nServices', x: 500, y: 180, color: '#3b82f6', bg: '#1e3a5f' },
+        { name: 'Database\n(Firestore)', x: 170, y: 340, color: '#8b5cf6', bg: '#2d1b4e' },
+        { name: 'Auth\nService', x: 390, y: 340, color: '#ef4444', bg: '#3b1a1a' },
+      ];
+      boxes.forEach((b, i) => {
+        elements.push({ id: `seed-box-${i}`, type: 'rectangle', x: b.x, y: b.y, width: 160, height: 70, fill: b.bg, stroke: b.color, strokeWidth: 2, text: b.name, fontSize: 12, textAlign: 'center', opacity: 1, locked: false });
+      });
+      // Connectors
+      elements.push({ id: 'seed-conn-0', type: 'arrow', x: 140, y: 250, x2: 360, y2: 180, stroke: '#71717a', strokeWidth: 1.5, opacity: 0.6, locked: false, text: '' });
+      elements.push({ id: 'seed-conn-1', type: 'arrow', x: 360, y: 250, x2: 580, y2: 180, stroke: '#71717a', strokeWidth: 1.5, opacity: 0.6, locked: false, text: '' });
+      elements.push({ id: 'seed-conn-2', type: 'arrow', x: 580, y: 250, x2: 250, y2: 340, stroke: '#71717a', strokeWidth: 1.5, opacity: 0.6, locked: false, text: '' });
+      elements.push({ id: 'seed-conn-3', type: 'arrow', x: 580, y: 250, x2: 470, y2: 340, stroke: '#71717a', strokeWidth: 1.5, opacity: 0.6, locked: false, text: '' });
+      // Sticky notes
+      elements.push({ id: 'seed-note-1', type: 'sticky', x: 600, y: 340, width: 160, height: 70, fill: '#fbbf24', stroke: 'transparent', strokeWidth: 0, text: 'TODO: Add caching\nlayer for API', fontSize: 11, textAlign: 'center', opacity: 1, locked: false });
+      elements.push({ id: 'seed-note-2', type: 'sticky', x: 60, y: 340, width: 100, height: 60, fill: '#f87171', stroke: 'transparent', strokeWidth: 0, text: 'Latency\n< 50ms', fontSize: 11, textAlign: 'center', opacity: 1, locked: false });
+
+      const boardId = uid();
+      const board = {
+        id: boardId,
+        name: 'System Architecture',
+        created: new Date().toISOString(),
+        modified: new Date().toISOString(),
+        elements: elements,
+        viewport: { x: 0, y: 0, zoom: 1 },
+      };
+      const data = {
+        boards: [board],
+        activeBoardId: boardId,
+        updatedAt: Date.now(),
+      };
+      docRef.set(data).then(() => {
+        console.log('[ForgeBoard] Demo Firestore seeded');
+      }).catch(err => {
+        console.warn('[ForgeBoard] Demo seed failed', err);
+      });
+    });
+  },
+
   loadDemoData() {
     // Board 1: Interceptor Drone — System Architecture
     const b1Elements = [];
@@ -2596,7 +4733,8 @@ const app = {
   },
 
   resetDemo() {
-    localStorage.removeItem(this.storageKey('boards'));
+    // Clear all ForgeBoard demo keys (localStorage + DemoFirestore)
+    Object.keys(localStorage).forEach(k => { if (k.includes('forgeboard')) localStorage.removeItem(k); });
     this.boards = [];
     this.elements = [];
     this.loadDemoData();
@@ -2797,6 +4935,8 @@ const app = {
     el.symbolCircle = s.circle || false;
     el.symbolFill = s.fillColor || '';
     el.symbolDash = s.dasharray || '';
+    el.opacity = 1;
+    el.iconScale = 1;
     this.elements.push(el);
     this.selection = [el.id];
     this.render();
@@ -3015,18 +5155,21 @@ const app = {
     group.setAttribute('data-id', el.id);
     group.style.opacity = el.opacity || 1;
     if (el.type === 'rectangle' || el.type === 'engineering-block') {
+      const isSymbol = el.type === 'engineering-block';
       const rect = document.createElementNS(SVG_NS, 'rect');
       rect.setAttribute('x', el.x); rect.setAttribute('y', el.y);
       rect.setAttribute('width', el.width); rect.setAttribute('height', el.height);
-      rect.setAttribute('rx', el.type === 'engineering-block' ? 2 : 6);
-      rect.setAttribute('fill', el.fill || this._themeBg2());
-      rect.setAttribute('stroke', el.stroke || this._themeAccent());
-      rect.setAttribute('stroke-width', el.strokeWidth || 2);
+      rect.setAttribute('rx', isSymbol ? 2 : 6);
+      rect.setAttribute('fill', isSymbol ? 'var(--bg)' : (el.fill || this._themeBg2()));
+      rect.setAttribute('stroke', isSymbol ? 'none' : (el.stroke || this._themeAccent()));
+      rect.setAttribute('stroke-width', isSymbol ? 0 : (el.strokeWidth || 2));
+      if (!isSymbol && el.strokeDasharray) rect.setAttribute('stroke-dasharray', el.strokeDasharray);
       group.appendChild(rect);
-      if (el.type === 'engineering-block' && el.symbolPath) {
+      if (isSymbol && el.symbolPath) {
         const pad = 8, labelH = el.text ? 20 : 0;
         const availW = el.width - pad * 2, availH = el.height - pad * 2 - labelH;
-        const scale = Math.min(availW / 24, availH / 24);
+        const baseScale = Math.min(availW / 24, availH / 24);
+        const scale = baseScale * (el.iconScale || 1);
         const ox = el.x + (el.width - 24 * scale) / 2;
         const oy = el.y + pad + (availH - 24 * scale) / 2;
         const sg = document.createElementNS(SVG_NS, 'g');
@@ -3051,7 +5194,31 @@ const app = {
       ell.setAttribute('fill', el.fill || this._themeBg2());
       ell.setAttribute('stroke', el.stroke || this._themeAccent());
       ell.setAttribute('stroke-width', el.strokeWidth || 2);
+      if (el.strokeDasharray) ell.setAttribute('stroke-dasharray', el.strokeDasharray);
       group.appendChild(ell);
+    } else if (el.type === 'image' && el.imageData) {
+      const img = document.createElementNS(SVG_NS, 'image');
+      img.setAttribute('x', el.x); img.setAttribute('y', el.y);
+      img.setAttribute('width', el.width); img.setAttribute('height', el.height);
+      img.setAttribute('href', el.imageData);
+      img.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+      group.appendChild(img);
+    } else if (el.type === 'math') {
+      const fo = document.createElementNS(SVG_NS, 'foreignObject');
+      fo.setAttribute('x', el.x); fo.setAttribute('y', el.y);
+      fo.setAttribute('width', el.width); fo.setAttribute('height', el.height);
+      const div = document.createElement('div');
+      div.style.cssText = `width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:${el.fontSize || 18}px;color:var(--fg);overflow:hidden;`;
+      if (window.katex) { try { katex.render(el.latex || '', div, { throwOnError: false, displayMode: true }); } catch(e) { div.textContent = el.latex || ''; } }
+      else { div.textContent = el.latex || ''; }
+      fo.appendChild(div); group.appendChild(fo);
+    } else if ((el.type === 'chart' || el.type === 'table') && el.imageData) {
+      const img = document.createElementNS(SVG_NS, 'image');
+      img.setAttribute('x', el.x); img.setAttribute('y', el.y);
+      img.setAttribute('width', el.width); img.setAttribute('height', el.height);
+      img.setAttribute('href', el.imageData);
+      img.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+      group.appendChild(img);
     }
     if (el.text) {
       const fo = document.createElementNS(SVG_NS, 'foreignObject');
