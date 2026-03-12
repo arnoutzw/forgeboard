@@ -434,7 +434,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent)}
       <button class="h-btn" onclick="app.toggleSidebar()" title="Toggle sidebar">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
       </button>
-      <div class="project-selector" id="project-selector">
+      <div class="project-selector" id="project-selector" data-hide-embedded="true">
         <span class="project-selector-label">Project</span>
         <select id="project-dropdown" onchange="app.switchProject(this.value)">
           <option value="">-- Select project --</option>
@@ -1367,7 +1367,8 @@ const app = {
     const dropdown = document.getElementById('project-dropdown');
     if (!container || !dropdown) return;
 
-    if (this.projects.length === 0) {
+    // Hide project selector when embedded in portal (portal owns project selection)
+    if (window._bsiIsEmbedded || this.projects.length === 0) {
       container.classList.remove('show');
       if (sep) sep.style.display = 'none';
       return;
