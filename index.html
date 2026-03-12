@@ -4643,7 +4643,7 @@ const app = {
       this.projects = Object.keys(reg).map(k => ({ id: reg[k].id || k, name: reg[k].name }));
     }
     if (!this.projects || !this.projects.length) {
-      this.projects = [{ id: 'demo_proj_001', name: 'CNC Milling Machine Retrofit' }];
+      this.projects = [{ id: 'demo_proj_001', name: 'FPV Interceptor Drone' }, { id: 'demo_proj_002', name: 'Bose Active Suspension' }];
     }
     this.activeProjectId = this.projects[0].id;
     this.renderProjectSelector();
