@@ -1339,9 +1339,8 @@ const app = {
 
       // Portal selected a project
       if (e.data.type === 'active-project' && e.data.projectId) {
-        this.activeProjectId = e.data.projectId;
+        this.switchProject(e.data.projectId);
         this.renderProjectSelector();
-        this.loadData();
       }
 
       // Real-time project updates from portal
@@ -1400,14 +1399,18 @@ const app = {
     const oldProjectId = this.activeProjectId;
     this.activeProjectId = projectId || null;
 
+    // Clear canvas immediately so old project content doesn't linger
+    this.boards = [];
+    this.elements = [];
+    this.activeBoardId = null;
+    this.render();
+
     if (!projectId) {
       // Deselected project — revert to localStorage
       if (this._firestoreUnsubscribe) {
         this._firestoreUnsubscribe();
         this._firestoreUnsubscribe = null;
       }
-      this.boards = [];
-      this.elements = [];
       this._loadFromLocalStorage();
       if (this.boards.length > 0 && this.activeBoardId) {
         this.switchBoard(this.activeBoardId);
@@ -1420,6 +1423,10 @@ const app = {
     if (db && this.currentUser) {
       this.loadFromFirestore(projectId);
       this.toast(`Project: ${this.projects.find(p => p.id === projectId)?.name || projectId}`);
+    } else {
+      // No Firestore — create empty board for this project
+      this.createBoard('Untitled Board');
+      this.render();
     }
   },
 
@@ -1485,16 +1492,25 @@ const app = {
         this.activeBoardId = d.activeBoardId || (this.boards[0] && this.boards[0].id);
         console.log('[ForgeBoard] Loaded from Firestore:', this.boards.length, 'boards');
       } else {
-        // Firestore has no data, fall back to localStorage
-        this._loadFromLocalStorage();
-        console.log('[ForgeBoard] No Firestore data, loaded from localStorage');
+        // Firestore has no data for this project — start with empty board
+        console.log('[ForgeBoard] No Firestore data for project, starting empty');
+        this.boards = [];
+        this.elements = [];
+        this.activeBoardId = null;
+        this.createBoard('Untitled Board');
       }
       if (this.boards.length > 0 && this.activeBoardId) {
         this.switchBoard(this.activeBoardId);
+      } else {
+        this.render();
       }
     }).catch(err => {
-      console.warn('[ForgeBoard] Firestore load failed, using localStorage', err);
-      this._loadFromLocalStorage();
+      console.warn('[ForgeBoard] Firestore load failed', err);
+      this.boards = [];
+      this.elements = [];
+      this.activeBoardId = null;
+      this.createBoard('Untitled Board');
+      this.render();
     });
 
     // Listen for real-time updates
