@@ -1390,13 +1390,34 @@ const app = {
   switchProject(projectId) {
     if (projectId === this.activeProjectId) return;
 
-    // Save current boards to the old project before switching
+    // Save current boards to the OLD project before switching
+    // Must capture data NOW because boards/activeProjectId change below
     if (db && this.currentUser && this.activeProjectId) {
-      this._saveDirty = true;
-      this._flushSave();
+      const b = this.getActiveBoard();
+      if (b) {
+        b.elements = JSON.parse(JSON.stringify(this.elements));
+        b.viewport = { ...this.viewport };
+        b.modified = new Date().toISOString();
+      }
+      const saveData = {
+        boards: JSON.parse(JSON.stringify(this.boards)),
+        activeBoardId: this.activeBoardId,
+        updatedAt: Date.now(),
+      };
+      const oldPid = this.activeProjectId;
+      // Save to localStorage
+      try {
+        localStorage.setItem(this.storageKey('boards'), JSON.stringify({
+          boards: this.boards, activeBoardId: this.activeBoardId
+        }));
+      } catch(e) {}
+      // Save to Firestore with captured old project ID
+      const docRef = db.collection('projects').doc(oldPid).collection('forgeboard').doc('state');
+      docRef.set(saveData, { merge: false })
+        .then(() => console.log('[ForgeBoard] Saved boards to old project:', oldPid))
+        .catch(err => console.warn('[ForgeBoard] Save to old project failed', err));
     }
 
-    const oldProjectId = this.activeProjectId;
     this.activeProjectId = projectId || null;
 
     // Clear canvas immediately so old project content doesn't linger
