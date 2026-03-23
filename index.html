@@ -300,7 +300,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent)}
       if (e.data && e.data.type === 'theme-change') applyBsiTheme(mapTheme(e.data.theme));
     });
     applyBsiTheme('dark');
-    try { window.parent.postMessage({ type: 'theme-request' }, '*'); } catch(e) {}
+    try { window.parent.postMessage({ type: 'theme-request' }, window.location.ancestorOrigins?.[0] || '*'); } catch(e) {}
   } else {
     var saved = localStorage.getItem(APP_THEME_KEY) || 'dark';
     if (saved === 'asml') { saved = 'light'; localStorage.setItem(APP_THEME_KEY, saved); }
@@ -1182,6 +1182,12 @@ function initFirebaseIfNeeded(config) {
   console.log('[ForgeBoard] Firebase initialized');
 }
 
+const ALLOWED_ORIGINS = ['https://blacksphereindustries.nl', 'https://www.blacksphereindustries.nl'];
+if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+  ALLOWED_ORIGINS.push('http://localhost:8080');
+}
+function isAllowedOrigin(origin) { return ALLOWED_ORIGINS.includes(origin) || origin.endsWith('.pages.dev'); }
+
 // ─── Main Application ────────────────────────────────────────────
 const app = {
   // State
@@ -1273,6 +1279,7 @@ const app = {
 
   setupSSO() {
     window.addEventListener('message', (e) => {
+      if (!isAllowedOrigin(e.origin)) return;
       if (!e.data) return;
 
       // ── Demo seed data handler ──────────────────────────────
