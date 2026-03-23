@@ -1,0 +1,639 @@
+%% =============================================================================
+%% ForgeBoard Web — UML Diagrams (Mermaid)
+%% =============================================================================
+
+%% === Class Diagram ===
+classDiagram
+    class App {
+        +Board[] boards
+        +string activeBoardId
+        +string tool
+        +Element[] elements
+        +string[] selection
+        +object[] undoStack
+        +object[] redoStack
+        +Viewport viewport
+        +number gridSize
+        +boolean snapToGrid
+        +object dragging
+        +object resizing
+        +object drawing
+        +object rubberBand
+        +boolean penPressure
+        +number penWidth
+        +string penColor
+        +number penOpacity
+        +string penMode
+        +boolean penSmoothing
+        +number eraserRadius
+        +string shapeFill
+        +string shapeStroke
+        +number shapeStrokeWidth
+        +string shapeStrokeDash
+        +string theme
+        +object currentUser
+        +object ssoUser
+        +Project[] projects
+        +string activeProjectId
+        +boolean isDemo
+        +Firestore db
+        +Function _firestoreUnsubscribe
+        +init()
+        +setTool(id)
+        +render()
+        +saveData()
+        +loadData()
+        +switchBoard(id)
+        +switchProject(projectId)
+        +createElement(type, x, y, w, h) Element
+        +pushUndo()
+        +undo()
+        +redo()
+        +hitTest(x, y) Element
+        +hitResizeHandle(x, y, el) string
+        +screenToCanvas(sx, sy) Point
+        +canvasToScreen(cx, cy) Point
+        +zoomTo(z, cx, cy)
+        +fitToScreen()
+        +bindEvents()
+    }
+
+    class Board {
+        +string id
+        +string name
+        +string created
+        +string modified
+        +Element[] elements
+        +Viewport viewport
+        +string projectId
+    }
+
+    class Viewport {
+        +number x
+        +number y
+        +number zoom
+    }
+
+    class Element {
+        +string id
+        +string type
+        +number x
+        +number y
+        +number width
+        +number height
+        +number rotation
+        +string fill
+        +string stroke
+        +number strokeWidth
+        +string strokeDasharray
+        +string text
+        +number fontSize
+        +string textAlign
+        +number opacity
+        +boolean locked
+        +Port[] ports
+        +object metadata
+    }
+
+    class RectangleElement {
+        +string type = "rectangle"
+    }
+
+    class EllipseElement {
+        +string type = "ellipse"
+    }
+
+    class DiamondElement {
+        +string type = "diamond"
+    }
+
+    class StickyElement {
+        +string type = "sticky"
+        +string fill
+        +string text
+    }
+
+    class TextElement {
+        +string type = "text"
+        +string text
+        +number fontSize
+    }
+
+    class LineElement {
+        +string type = "line"
+        +number x2
+        +number y2
+    }
+
+    class ArrowElement {
+        +string type = "arrow"
+        +number x2
+        +number y2
+    }
+
+    class ConnectorElement {
+        +string type = "connector"
+        +number x2
+        +number y2
+        +string routeType
+    }
+
+    class FreehandElement {
+        +string type = "freehand"
+        +StrokePoint[] points
+        +string mode
+    }
+
+    class ImageElement {
+        +string type = "image"
+        +string imageData
+    }
+
+    class MathElement {
+        +string type = "math"
+        +string latex
+        +number fontSize
+    }
+
+    class ChartElement {
+        +string type = "chart"
+        +ChartConfig chartConfig
+        +string imageData
+    }
+
+    class TableElement {
+        +string type = "table"
+        +TableConfig tableConfig
+        +string imageData
+    }
+
+    class EngineeringBlockElement {
+        +string type = "engineering-block"
+        +string symbolPath
+        +string symbolExtra
+        +string symbolLabel
+        +boolean symbolCircle
+        +string symbolFill
+        +string symbolDash
+        +number iconScale
+    }
+
+    class StrokePoint {
+        +number x
+        +number y
+        +number pressure
+    }
+
+    class ChartConfig {
+        +string type
+        +string[][] data
+    }
+
+    class TableConfig {
+        +string style
+        +string[][] data
+    }
+
+    class ToolDefinition {
+        +string id
+        +string label
+        +string key
+        +string icon
+    }
+
+    class DemoFirestore {
+        <<localStorage shim>>
+        +collection(name) CollRef
+        +doc(path) DocRef
+        +batch() Batch
+        +runTransaction(fn)
+    }
+
+    class BSIThemeBridge {
+        <<portal integration>>
+        +detectTheme()
+        +setupSSO()
+        +onThemeChange(callback)
+    }
+
+    App "1" *-- "*" Board : manages
+    Board "1" *-- "*" Element : contains
+    Board "1" *-- "1" Viewport : has
+    Element <|-- RectangleElement
+    Element <|-- EllipseElement
+    Element <|-- DiamondElement
+    Element <|-- StickyElement
+    Element <|-- TextElement
+    Element <|-- LineElement
+    Element <|-- ArrowElement
+    Element <|-- ConnectorElement
+    Element <|-- FreehandElement
+    Element <|-- ImageElement
+    Element <|-- MathElement
+    Element <|-- ChartElement
+    Element <|-- TableElement
+    Element <|-- EngineeringBlockElement
+    FreehandElement "1" *-- "*" StrokePoint
+    ChartElement "1" *-- "1" ChartConfig
+    TableElement "1" *-- "1" TableConfig
+    App --> ToolDefinition : 18 tools
+    App --> DemoFirestore : demo mode
+    App --> BSIThemeBridge : portal comms
+
+
+%% === Sequence Diagram — Shape Creation Workflow ===
+sequenceDiagram
+    participant User
+    participant UI as App UI
+    participant SVG as SVG Canvas
+    participant State as App State
+    participant Render as Renderer
+    participant LS as localStorage
+    participant FS as Firestore
+
+    User->>UI: Select Rectangle tool (press R)
+    UI->>State: setTool("rectangle")
+    State->>UI: Update cursor to crosshair
+    UI->>UI: Show shape panel (fill/stroke/dash options)
+
+    User->>SVG: pointerdown at (x1, y1)
+    SVG->>State: onPointerDown(event)
+    State->>State: screenToCanvas(clientX, clientY)
+    State->>State: snapVal(canvasX), snapVal(canvasY)
+    State->>State: drawing = {type:"rectangle", startX, startY, x, y, width:0, height:0}
+
+    loop User drags mouse
+        User->>SVG: pointermove
+        SVG->>State: onPointerMove(event)
+        State->>State: screenToCanvas(clientX, clientY)
+        State->>State: Update drawing.x, drawing.y, drawing.width, drawing.height
+        State->>Render: renderDrawingPreview()
+        Render->>SVG: Draw preview rectangle (dashed outline)
+        SVG-->>User: Visual feedback of shape size
+    end
+
+    User->>SVG: pointerup
+    SVG->>State: onPointerUp(event)
+
+    alt Shape large enough (width > 5 AND height > 5)
+        State->>State: pushUndo()
+        Note over State: undoStack.push(JSON.stringify(elements))
+        State->>State: createElement("rectangle", x, y, w, h)
+        Note over State: Returns element with id, fill, stroke,<br/>strokeWidth, dasharray, opacity, locked, ports
+        State->>State: elements.push(newElement)
+        State->>State: selection = [newElement.id]
+        State->>Render: render()
+        Render->>SVG: Clear and redraw all elements
+        Render->>SVG: Draw selection handles on new element
+        State->>State: saveData()
+        State->>LS: localStorage.setItem(key, JSON.stringify({boards, activeBoardId}))
+
+        opt Firestore connected
+            State->>FS: docRef.set({boards, activeBoardId, updatedAt})
+            FS-->>State: Save confirmed
+        end
+
+        State-->>User: Shape appears on canvas, selected
+    else Shape too small
+        State->>State: Discard drawing
+        State->>Render: clearOverlay()
+    end
+
+
+%% === Sequence Diagram — Freehand Drawing Workflow ===
+sequenceDiagram
+    participant User
+    participant UI as App UI
+    participant DC as Draw Canvas (2D)
+    participant SVGCanvas as SVG Canvas
+    participant State as App State
+    participant Smooth as smoothPoints()
+
+    User->>UI: Select Pen tool (press P)
+    UI->>State: setTool("pen")
+    State->>UI: Show pen panel (color, width, opacity, mode, pressure, smoothing)
+    State->>DC: drawCanvas.style.pointerEvents = "auto"
+
+    User->>DC: pointerdown (stylus/mouse)
+    DC->>State: onDrawDown(event)
+
+    alt pointerType === "touch"
+        State->>State: _panStart = {clientX, clientY, viewport}
+        Note over State: Finger = pan, not draw
+    else pointerType === "pen" or "mouse"
+        State->>DC: setPointerCapture(pointerId)
+        State->>State: screenToCanvas(clientX, clientY)
+        State->>State: _currentStroke = {points:[{x,y,pressure}], color, baseWidth, opacity, mode}
+    end
+
+    loop User draws (pointermove events)
+        User->>DC: pointermove
+        DC->>State: onDrawMove(event)
+        State->>State: screenToCanvas(clientX, clientY)
+        State->>State: _currentStroke.points.push({x, y, pressure})
+        State->>State: renderCurrentStroke()
+        State->>DC: clearRect full canvas
+        State->>DC: drawFreehandElements(ctx) — all existing freehand
+        State->>DC: Draw current stroke segments
+
+        loop For each point pair
+            State->>DC: canvasToScreenLocal(p0), canvasToScreenLocal(p1)
+
+            alt Pressure sensitivity enabled AND not highlighter
+                State->>DC: lineWidth = baseWidth * (pressure * 1.5 + 0.3) * zoom
+            else
+                State->>DC: lineWidth = baseWidth * zoom
+            end
+
+            State->>DC: ctx.beginPath(), moveTo, lineTo, stroke
+        end
+
+        DC-->>User: Live ink trail on canvas
+    end
+
+    User->>DC: pointerup
+    DC->>State: onDrawUp(event)
+
+    alt points.length > 1
+        State->>State: pushUndo()
+
+        opt penSmoothing enabled AND points.length > 4
+            State->>Smooth: smoothPoints(points, tension=0.5)
+            Smooth-->>State: Smoothed points array (Catmull-Rom)
+        end
+
+        State->>State: Create freehand element
+        Note over State: {id, type:"freehand", points, stroke, strokeWidth,<br/>opacity, mode, x, y, width, height (bounding box)}
+        State->>State: elements.push(freehandElement)
+        State->>State: saveData()
+    else Single point (click without drag)
+        State->>State: Discard stroke
+    end
+
+    State->>State: _currentStroke = null
+    State->>DC: renderFreehandStrokes() — redraw all freehand elements
+    DC-->>User: Final smoothed stroke on canvas
+
+
+%% === Sequence Diagram — Portal SSO + Firestore Sync ===
+sequenceDiagram
+    participant Portal as BSI Portal
+    participant Frame as ForgeBoard (iframe)
+    participant State as App State
+    participant FB as Firebase
+    participant FS as Firestore
+
+    Portal->>Frame: postMessage({type:"admin-auth", firebaseConfig, projects, sso})
+    Frame->>State: setupSSO() message handler
+
+    State->>State: Extract firebaseConfig, projects[], sso user
+    State->>FB: initFirebaseIfNeeded(config)
+    FB-->>State: firebase.initializeApp() done
+    State->>FB: firebase.firestore()
+    FB-->>State: db instance
+
+    State->>State: currentUser = {uid, email, name, role}
+    State->>State: projects = projects[]
+    State->>State: renderProjectSelector()
+    State-->>Portal: (ready)
+
+    Portal->>Frame: postMessage({type:"active-project", projectId:"proj-123"})
+    Frame->>State: switchProject("proj-123")
+
+    opt Save current project boards first
+        State->>FS: old project docRef.set({boards, activeBoardId, updatedAt})
+        FS-->>State: Saved
+        State->>State: localStorage backup
+    end
+
+    State->>State: activeProjectId = "proj-123"
+    State->>State: Clear boards, elements, activeBoardId
+
+    State->>FS: db.collection("projects").doc("proj-123").collection("forgeboard").doc("state").get()
+    FS-->>State: Document snapshot
+
+    alt Document exists
+        State->>State: boards = snapshot.boards
+        State->>State: activeBoardId = snapshot.activeBoardId
+        State->>State: switchBoard(activeBoardId)
+        State->>State: render()
+    else No document
+        State->>State: createBoard("Untitled Board")
+        State->>State: render()
+    end
+
+    Note over State: Set up real-time listener
+
+    State->>FS: docRef.onSnapshot(callback)
+
+    loop Real-time sync
+        FS-->>State: onSnapshot triggered (remote change)
+        State->>State: Check hasPendingWrites (skip own writes)
+        State->>State: Check updatedAt > lastFirestoreUpdate
+        alt Remote update is newer
+            State->>State: boards = remote.boards
+            State->>State: elements = activeBoard.elements
+            State->>State: viewport = activeBoard.viewport
+            State->>State: render()
+            State-->>Portal: Canvas updated with remote changes
+        end
+    end
+
+    Note over State: Periodic auto-save every 2s
+
+    loop Auto-save interval
+        State->>State: _flushSave()
+        State->>State: localStorage.setItem(backup)
+        State->>FS: docRef.set({boards, activeBoardId, updatedAt}, merge:false)
+        FS-->>State: Saved
+    end
+
+
+%% === Component Diagram ===
+graph TB
+    subgraph "BSI Portal"
+        PORTAL["Portal (parent frame)<br/>Auth + Project selection"]
+    end
+
+    subgraph Browser["ForgeBoard App"]
+        subgraph UI["User Interface"]
+            SIDEBAR["Sidebar<br/>(18 tools)"]
+            CANVAS["SVG Canvas<br/>(shapes, text, images, math)"]
+            DRAWCANVAS["2D Canvas Overlay<br/>(freehand strokes)"]
+            PANELS["Option Panels<br/>(Pen, Shape, Symbol)"]
+            MODALS["Modals<br/>(Math/KaTeX, Chart/Plotly, Table)"]
+            PROPS["Properties Bar"]
+            MINIMAP["Minimap"]
+            BOARDS["Board Tabs"]
+        end
+
+        subgraph Core["Core Logic"]
+            STATE["App State Manager"]
+            VIEWPORT["Viewport Transform<br/>(zoom, pan, scroll)"]
+            HITTEST["Hit Testing<br/>(point, radius, bounds)"]
+            UNDOREDO["Undo/Redo Stack<br/>(50 levels)"]
+            PERSIST["Persistence Layer"]
+        end
+
+        subgraph Renderers["Element Renderers"]
+            SVGRENDER["SVG Renderer<br/>(rect, ellipse, diamond, sticky,<br/>image, math, chart, table,<br/>engineering-block)"]
+            LINERENDER["Line/Arrow/Connector Renderer<br/>(straight, elbow, curved)"]
+            FREEHAND["Freehand Renderer<br/>(pressure, smoothing, modes)"]
+        end
+
+        subgraph Libraries["CDN Libraries"]
+            KATEX["KaTeX<br/>(LaTeX rendering)"]
+            PLOTLY["Plotly.js<br/>(Chart rendering)"]
+            FIREBASE["Firebase SDK<br/>(Auth + Firestore)"]
+        end
+
+        THEME["BSI Theme Bridge<br/>(dark/light/eink)"]
+        DEMO["DemoFirestore Shim<br/>(localStorage backend)"]
+    end
+
+    subgraph Storage["Storage"]
+        LOCALSTORAGE["localStorage"]
+        FIRESTORE["Firestore<br/>(project-scoped + personal)"]
+    end
+
+    PORTAL -->|postMessage SSO| THEME
+    PORTAL -->|active-project| STATE
+
+    SIDEBAR --> STATE
+    CANVAS --> STATE
+    DRAWCANVAS --> STATE
+    PANELS --> STATE
+    MODALS --> STATE
+
+    STATE --> VIEWPORT
+    STATE --> HITTEST
+    STATE --> UNDOREDO
+    STATE --> PERSIST
+
+    STATE --> SVGRENDER
+    STATE --> LINERENDER
+    STATE --> FREEHAND
+
+    SVGRENDER --> CANVAS
+    LINERENDER --> CANVAS
+    FREEHAND --> DRAWCANVAS
+
+    MODALS --> KATEX
+    MODALS --> PLOTLY
+
+    PERSIST --> LOCALSTORAGE
+    PERSIST --> FIREBASE
+    FIREBASE --> FIRESTORE
+    DEMO --> LOCALSTORAGE
+
+
+%% === State Diagram ===
+stateDiagram-v2
+    [*] --> Initializing
+
+    state Initializing {
+        [*] --> DetectTheme
+        DetectTheme --> SetupSSO
+        SetupSSO --> LoadData
+        LoadData --> BuildTools
+        BuildTools --> BindEvents
+        BindEvents --> InitialRender
+    }
+
+    InitialRender --> Ready
+
+    state Ready {
+        [*] --> SelectTool
+
+        state SelectTool {
+            [*] --> SelectMode
+            SelectMode --> PanMode : Press H
+            PanMode --> SelectMode : Press V
+            SelectMode --> DrawMode : Press P
+            DrawMode --> SelectMode : Press V
+            SelectMode --> ShapeMode : Press R/O/D
+            ShapeMode --> SelectMode : Press V
+            SelectMode --> LineMode : Press L/A/C
+            LineMode --> SelectMode : Press V
+            SelectMode --> TextMode : Press T
+            SelectMode --> StickyMode : Press S
+            SelectMode --> EraserMode : Press E
+            EraserMode --> SelectMode : Press V
+            SelectMode --> LassoMode : Press Q
+            LassoMode --> SelectMode : Press V
+        }
+
+        state SelectMode {
+            [*] --> Idle
+            Idle --> ElementSelected : Click element
+            ElementSelected --> Dragging : Drag selected
+            Dragging --> ElementSelected : Drop
+            ElementSelected --> Resizing : Drag handle
+            Resizing --> ElementSelected : Release
+            ElementSelected --> Idle : Click empty
+            Idle --> RubberBand : Drag empty space
+            RubberBand --> MultiSelected : Release
+            MultiSelected --> Dragging : Drag selection
+            MultiSelected --> Idle : Click empty
+            ElementSelected --> Editing : Double-click
+            Editing --> ElementSelected : Finish edit
+        }
+
+        state DrawMode {
+            [*] --> PenIdle
+            PenIdle --> Drawing : Pointer down (pen/mouse)
+            Drawing --> Drawing : Pointer move (collect points)
+            Drawing --> SmoothingStroke : Pointer up
+            SmoothingStroke --> PenIdle : Stroke saved to elements
+            PenIdle --> Panning : Touch (finger)
+            Panning --> PenIdle : Touch end
+        }
+
+        state ShapeMode {
+            [*] --> ShapeIdle
+            ShapeIdle --> ShapeDrawing : Pointer down
+            ShapeDrawing --> ShapeDrawing : Pointer move (preview)
+            ShapeDrawing --> ShapeCreated : Pointer up (size OK)
+            ShapeDrawing --> ShapeIdle : Pointer up (too small)
+            ShapeCreated --> ShapeIdle : Element added
+        }
+
+        state LineMode {
+            [*] --> LineIdle
+            LineIdle --> LineDrawing : Pointer down (snap to port)
+            LineDrawing --> LineDrawing : Pointer move (snap end port)
+            LineDrawing --> LineCreated : Pointer up (length OK)
+            LineCreated --> LineIdle : Element added
+        }
+
+        state EraserMode {
+            [*] --> EraserIdle
+            EraserIdle --> Erasing : Click/drag on element
+            Erasing --> EraserIdle : Element removed
+        }
+    }
+
+    state BoardManagement {
+        [*] --> SingleBoard
+        SingleBoard --> MultipleBoards : Create board
+        MultipleBoards --> MultipleBoards : Switch board
+        MultipleBoards --> SingleBoard : Delete boards
+    }
+
+    state ProjectSync {
+        [*] --> LocalOnly
+        LocalOnly --> ProjectScoped : SSO + project selected
+        ProjectScoped --> LocalOnly : Project deselected
+        ProjectScoped --> ProjectScoped : Switch project (save old, load new)
+
+        state ProjectScoped {
+            [*] --> LoadingFromFirestore
+            LoadingFromFirestore --> LiveSync : Data loaded
+            LiveSync --> LiveSync : Remote update via onSnapshot
+            LiveSync --> AutoSaving : 2s interval / dirty flag
+            AutoSaving --> LiveSync : Saved to Firestore + localStorage
+        }
+    }
+
+    Ready --> BoardManagement : Board operations
+    Ready --> ProjectSync : Auth events
