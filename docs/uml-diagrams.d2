@@ -1,0 +1,494 @@
+# ForgeBoard — UML Diagrams
+# Browser-based whiteboard/dashboard with Firebase sync, SVG canvas,
+# engineering symbols, charts, tables, math equations, and freehand drawing
+
+# ============================================================
+# CLASSES
+# ============================================================
+class-diagram: {
+  label: "Class Diagram"
+
+  App: "ForgeBoard App" {
+    shape: class
+    state: AppState
+    boards: "Board[]"
+    activeBoard: Board
+    elements: "Element[]"
+    selectedIds: "Set<string>"
+    activeTool: string
+    layers: "Layer[]"
+    clipboard: "Element[]"
+    undoStack: "Element[][]"
+    redoStack: "Element[][]"
+
+    init()
+    switchProject(id)
+    switchBoard(id)
+    createNewBoard()
+    renameBoard()
+    selectTool(tool)
+    addElement(type, x, y)
+    deleteSelected()
+    duplicateSelected()
+    moveElement(id, dx, dy)
+    resizeElement(id, handle, delta)
+    undo()
+    redo()
+    save()
+    exportJSON()
+    importJSON()
+    exportPNG()
+  }
+
+  Board: Board {
+    shape: class
+    id: string
+    name: string
+    elements: "Element[]"
+    viewport: Viewport
+    gridEnabled: boolean
+    layers: "Layer[]"
+    created: timestamp
+    modified: timestamp
+    projectId: string
+  }
+
+  Viewport: Viewport {
+    shape: class
+    panX: number
+    panY: number
+    zoom: number
+
+    screenToWorld(sx, sy)
+    worldToScreen(wx, wy)
+    zoomBy(factor, cx, cy)
+    fitToScreen()
+  }
+
+  Element: "Element (base)" {
+    shape: class
+    id: string
+    type: string
+    x: number
+    y: number
+    field_width: number
+    field_height: number
+    rotation: number
+    fill: string
+    stroke: string
+    strokeWidth: number
+    strokeDasharray: string
+    text: string
+    fontSize: number
+    textAlign: string
+    opacity: number
+    locked: boolean
+    ports: "Port[]"
+    layer: string
+    metadata: object
+  }
+
+  ShapeElement: "Shape Elements" {
+    shape: class
+    rectangle: "borderRadius"
+    ellipse: "(rx, ry derived)"
+    diamond: "(rotated square)"
+    sticky: "note color variants"
+  }
+
+  LineElement: "Line Elements" {
+    shape: class
+    x2: number
+    y2: number
+    routeType: "straight|elbow|curved"
+    fromId: string
+    toId: string
+    fromPort: string
+    toPort: string
+    markerEnd: "arrow|none"
+  }
+
+  FreehandElement: FreehandElement {
+    shape: class
+    points: "StrokePoint[]"
+    mode: "pen|marker|highlighter"
+    pressure: boolean
+    smoothing: boolean
+  }
+
+  SpecialElement: "Special Elements" {
+    shape: class
+    engineering-block: "symbolPath, symbolExtra, symbolLabel"
+    image: "imageData (base64)"
+    chart: "chartConfig (JSON), imageData"
+    table: "tableConfig (JSON), imageData"
+    math: "latex, imageData (KaTeX rendered)"
+  }
+
+  Port: Port {
+    shape: class
+    id: string
+    side: "top|right|bottom|left"
+    position: number
+  }
+
+  Layer: Layer {
+    shape: class
+    id: string
+    name: string
+    visible: boolean
+    locked: boolean
+    order: int
+  }
+
+  SymbolLibrary: SymbolLibrary {
+    shape: class
+    categories: "Category[]"
+    symbols: "SymbolDef[]"
+
+    filterSymbols(query)
+    getCategory(name)
+  }
+
+  CanvasRenderer: SVGCanvasRenderer {
+    shape: class
+    svgCanvas: SVGElement
+    canvasGrid: SVGGElement
+    canvasElements: SVGGElement
+    canvasConnectors: SVGGElement
+    canvasPorts: SVGGElement
+    canvasOverlay: SVGGElement
+    canvasSelection: SVGGElement
+
+    renderAll()
+    renderElement(el)
+    renderConnector(conn)
+    renderSelection(ids)
+    renderMinimap()
+  }
+
+  DrawCanvas: DrawCanvas {
+    shape: class
+    canvas: HTMLCanvasElement
+    ctx: CanvasRenderingContext2D
+    currentStroke: "StrokePoint[]"
+
+    startStroke(e)
+    continueStroke(e)
+    endStroke()
+    clearCanvas()
+  }
+
+  DemoFirestore: DemoFirestore {
+    shape: class
+    DB_PREFIX: "'demo_db_'"
+
+    getStore(path)
+    setStore(path, data)
+    makeDocRef(path)
+    makeCollRef(path)
+    makeDocSnap(id, data)
+    addListener(path, cb)
+    notifyListeners(path)
+  }
+
+  FirebaseBackend: FirebaseBackend {
+    shape: class
+    auth: FirebaseAuth
+    db: Firestore
+
+    signIn()
+    signOut()
+    onAuthChange(cb)
+    loadBoards()
+    saveBoard(board)
+    deleteBoard(id)
+    onBoardsChange(cb)
+  }
+
+  # Relationships
+  App -> Board: "manages 1..N"
+  Board -> Element: "contains 0..N"
+  Board -> Viewport: "has 1"
+  Board -> Layer: "has 1..N"
+  Element -> Port: "has 0..4"
+  Element <-> ShapeElement: "subtypes"
+  Element <-> LineElement: "subtypes"
+  Element <-> FreehandElement: "subtypes"
+  Element <-> SpecialElement: "subtypes"
+  App -> CanvasRenderer: "uses"
+  App -> DrawCanvas: "uses"
+  App -> SymbolLibrary: "uses"
+  App -> FirebaseBackend: "persistence"
+  App -> DemoFirestore: "demo mode"
+}
+
+# ============================================================
+# SEQUENCE: MAIN — Board Editing Workflow
+# ============================================================
+seq-main: "Board Editing Workflow" {
+  shape: sequence_diagram
+
+  user: User
+  app: "ForgeBoard App"
+  sidebar: Sidebar
+  canvas: "SVG Canvas"
+  draw: "Draw Canvas"
+  firebase: "Firebase / DemoFirestore"
+  renderer: "Canvas Renderer"
+
+  # Tool selection and element creation
+  user -> sidebar: "Click Rectangle tool"
+  sidebar -> app: "selectTool('rectangle')"
+  app -> canvas: "Set cursor to crosshair"
+
+  user -> canvas: "mousedown at (100, 200)"
+  canvas -> app: "startDrag(x, y)"
+  user -> canvas: "mousemove to (300, 350)"
+  canvas -> app: "updateDrag(x, y)"
+  app -> renderer: "renderPreview(rect outline)"
+  user -> canvas: "mouseup"
+  canvas -> app: "endDrag(x, y)"
+  app -> app: "createElement('rectangle', 100, 200, 200, 150)"
+  app -> app: "pushUndo()"
+  app -> renderer: "renderAll()"
+  app -> firebase: "save(board)"
+
+  # Select and modify
+  user -> canvas: "Click on element"
+  canvas -> app: "hitTest(x, y) -> elementId"
+  app -> app: "selectElement(id)"
+  app -> renderer: "renderSelection(handles)"
+  app -> app: "showPropertyPanel()"
+
+  # Change fill color
+  user -> app: "Change fill color in props bar"
+  app -> app: "pushUndo()"
+  app -> app: "element.fill = newColor"
+  app -> renderer: "renderElement(element)"
+  app -> firebase: "debouncedSave()"
+
+  # Freehand drawing
+  user -> sidebar: "Click Pen tool"
+  sidebar -> app: "selectTool('pen')"
+  app -> draw: "Show draw canvas overlay"
+  user -> draw: "pointerdown"
+  draw -> draw: "startStroke(x, y, pressure)"
+  user -> draw: "pointermove (drawing)"
+  draw -> draw: "continueStroke(x, y, pressure)"
+  draw -> draw: "Render smooth curve on canvas"
+  user -> draw: "pointerup"
+  draw -> app: "endStroke(points[])"
+  app -> app: "createElement('freehand', {points, mode, color, width})"
+  app -> renderer: "renderFreehand(element)"
+  app -> firebase: "save(board)"
+}
+
+# ============================================================
+# SEQUENCE: SECONDARY — Auth, Project Switching, Import/Export
+# ============================================================
+seq-secondary: "Auth, Project Switching, and Import/Export" {
+  shape: sequence_diagram
+
+  user: User
+  app: "ForgeBoard App"
+  portal: "BSI Portal (parent iframe)"
+  firebase: "Firebase Auth + Firestore"
+  demo: "DemoFirestore"
+  fs: "File System"
+
+  # Auth via portal postMessage
+  portal -> app: "postMessage({type: 'auth-token', token, uid})"
+  app -> app: "Detect embedded mode"
+  app -> firebase: "signInWithCustomToken(token)"
+  firebase -> app: "User authenticated"
+  app -> firebase: "loadBoards(uid)"
+  firebase -> app: "boards[] snapshot"
+  app -> app: "Render board list"
+
+  # Demo mode
+  user -> app: "Open with ?demo=true"
+  app -> app: "DEMO_MODE = true"
+  app -> demo: "Initialize DemoFirestore shim"
+  demo -> demo: "Load from localStorage"
+  app -> demo: "loadBoards()"
+  demo -> app: "Demo boards from localStorage"
+
+  # Project switching
+  user -> app: "Select project from dropdown"
+  app -> firebase: "query boards where projectId == selected"
+  firebase -> app: "Filtered boards"
+  app -> app: "Switch to first board"
+
+  # Export JSON
+  user -> app: "Click Export JSON"
+  app -> app: "Serialize board to JSON"
+  app -> fs: "Create Blob, trigger download"
+  fs -> user: "board_export.json saved"
+
+  # Import JSON
+  user -> app: "Click Import JSON"
+  app -> fs: "Open file picker"
+  user -> fs: "Select .json file"
+  fs -> app: "FileReader.readAsText()"
+  app -> app: "Parse JSON -> validate board structure"
+  app -> app: "Merge elements into active board"
+  app -> firebase: "save(board)"
+  app -> app: "renderAll()"
+
+  # Export PNG
+  user -> app: "Click Export PNG"
+  app -> app: "Create offscreen canvas"
+  app -> app: "Render all SVG elements to canvas"
+  app -> app: "canvas.toBlob('image/png')"
+  app -> fs: "Trigger download"
+  fs -> user: "board.png saved"
+
+  # Theme sync
+  portal -> app: "postMessage({type: 'theme-change', theme: 'light'})"
+  app -> app: "applyBsiTheme('light')"
+  app -> app: "Re-render canvas with light colors"
+}
+
+# ============================================================
+# ARCHITECTURE
+# ============================================================
+architecture: "System Architecture" {
+  browser: "Browser" {
+    shape: cloud
+
+    ui: "User Interface" {
+      sidebar: "Sidebar (18 tools in 5 groups)"
+      header: "Header (project, board name, zoom, undo/redo, export)"
+      canvas-wrap: "Canvas Wrapper" {
+        svg-canvas: "SVG Canvas (elements, connectors, grid)"
+        draw-canvas: "HTML5 Canvas (freehand drawing)"
+        minimap: "Minimap"
+        layers-panel: "Layers Panel"
+      }
+      panels: "Side Panels" {
+        pen-panel: "Pen Options (mode, color, width, opacity)"
+        shape-panel: "Shape Options (fill, stroke, dash)"
+        symbol-panel: "Engineering Symbol Library"
+        props-bar: "Properties Bar"
+      }
+      modals: "Modals" {
+        edit-modal: "Element Edit"
+        chart-modal: "Chart Editor"
+        table-modal: "Table Editor"
+        math-modal: "LaTeX Equation Editor"
+        new-board: "New Board"
+      }
+    }
+
+    logic: "Application Logic" {
+      app-core: "App Controller"
+      viewport-mgr: "Viewport Manager"
+      undo-redo: "Undo/Redo Stack"
+      hit-test: "Hit Testing"
+      clipboard: "Clipboard (copy/paste)"
+      keyboard: "Keyboard Shortcuts"
+      theme: "BSI Theme Bridge"
+    }
+
+    rendering: "Rendering" {
+      svg-renderer: "SVG Element Renderer"
+      freehand-renderer: "Freehand Stroke Renderer"
+      connector-renderer: "Connector Router"
+      symbol-renderer: "Engineering Symbol Renderer"
+      chart-renderer: "Chart.js Renderer"
+      math-renderer: "KaTeX Renderer"
+    }
+  }
+
+  backend: "Backend" {
+    firebase: "Firebase" {
+      shape: cylinder
+      auth: "Firebase Auth"
+      firestore: "Firestore" {
+        boards-col: "boards/{boardId}"
+        projects-col: "projects/{projectId}"
+      }
+    }
+    demo-store: "DemoFirestore (localStorage)" {
+      shape: cylinder
+    }
+  }
+
+  cdn: "CDN Libraries" {
+    shape: cylinder
+    firebase-sdk: "Firebase SDK v10.14"
+    katex: "KaTeX (LaTeX rendering)"
+  }
+
+  portal: "BSI Portal (parent)" {
+    shape: hexagon
+  }
+
+  portal -> browser.ui: "postMessage (auth, theme)"
+  browser.logic.app-core -> backend.firebase: "Firestore CRUD"
+  browser.logic.app-core -> backend.demo-store: "Demo mode"
+  browser.rendering -> cdn: "CDN imports"
+}
+
+# ============================================================
+# STATES — Tool State Machine
+# ============================================================
+states: "Tool State Machine" {
+  idle: "Idle\n(No tool active)" {
+    style.fill: "#27272a"
+  }
+  select: "Select Mode\n(Click to select, drag to move)" {
+    style.fill: "#4ade80"
+    style.font-color: "#000"
+  }
+  pan: "Pan Mode\n(Drag to pan viewport)" {
+    style.fill: "#60a5fa"
+    style.font-color: "#000"
+  }
+  drawing: "Drawing\n(Pen/Marker/Highlighter)" {
+    style.fill: "#f59e0b"
+    style.font-color: "#000"
+  }
+  erasing: "Erasing\n(Click elements to delete)" {
+    style.fill: "#f87171"
+    style.font-color: "#000"
+  }
+  shape_drag: "Shape Drag\n(Drag to create rect/ellipse/diamond)" {
+    style.fill: "#fbbf24"
+    style.font-color: "#000"
+  }
+  line_drag: "Line Drag\n(Drag to create line/arrow/connector)" {
+    style.fill: "#fb923c"
+    style.font-color: "#000"
+  }
+  content_place: "Content Placement\n(Click to place text/image/symbol/math/chart/table)" {
+    style.fill: "#a78bfa"
+    style.font-color: "#000"
+  }
+  editing: "Editing Element\n(Modal open for chart/table/math/text)" {
+    style.fill: "#22c55e"
+    style.font-color: "#000"
+  }
+  resizing: "Resizing\n(Drag handle to resize)" {
+    style.fill: "#e879f9"
+    style.font-color: "#000"
+  }
+
+  idle -> select: "Select tool (V)"
+  idle -> pan: "Pan tool (H)"
+  idle -> drawing: "Pen/Marker/Highlighter tool"
+  idle -> erasing: "Eraser tool"
+  idle -> shape_drag: "Rectangle/Ellipse/Diamond/Sticky tool"
+  idle -> line_drag: "Line/Arrow/Connector tool"
+  idle -> content_place: "Text/Image/Symbol/Math/Chart/Table tool"
+  select -> resizing: "Drag selection handle"
+  resizing -> select: "Mouse up"
+  shape_drag -> select: "Shape created (mouse up)"
+  line_drag -> select: "Line created (mouse up)"
+  content_place -> editing: "Click canvas -> open modal"
+  editing -> select: "Modal saved/closed"
+  drawing -> drawing: "Continue drawing"
+  drawing -> select: "Stroke complete (pointer up)"
+  select -> select: "Click another element"
+}
